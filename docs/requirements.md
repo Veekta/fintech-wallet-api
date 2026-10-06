@@ -1,5 +1,5 @@
 What problem are we solving?
-I am solving the problem of digital finance, where users can engage in financial transactions from one account to another. Receive and send digital money basically.
+We are solving the problem of digital finance, where users can engage in financial transactions from one account to another. Receive and send digital money basically.
 
 who are our users
 User
