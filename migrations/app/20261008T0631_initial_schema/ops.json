@@ -1,0 +1,206 @@
+[
+  {
+    "id": "table.User",
+    "label": "Create table \"User\"",
+    "summary": "Creates table \"User\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"User\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"User\"",
+        "sql": "CREATE TABLE \"public\".\"User\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"name\" text,\n  \"passwordHash\" text NOT NULL,\n  \"role\" text DEFAULT 'USER' NOT NULL,\n  \"status\" text DEFAULT 'ACTIVE' NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"User\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.Wallet",
+    "label": "Create table \"Wallet\"",
+    "summary": "Creates table \"Wallet\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Wallet"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Wallet\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Wallet\"",
+        "sql": "CREATE TABLE \"public\".\"Wallet\" (\n  \"balance\" numeric DEFAULT '0'::numeric NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"currency\" text DEFAULT 'NGN' NOT NULL,\n  \"id\" text NOT NULL,\n  \"status\" text DEFAULT 'ACTIVE' NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  \"userId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Wallet\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.User.User_email_key",
+    "label": "Add unique constraint on \"User\" (email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "User_email_key",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"User_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_email_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"User_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD CONSTRAINT \"User_email_key\" UNIQUE (\"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"User_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_email_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Wallet.Wallet_userId_key",
+    "label": "Add unique constraint on \"Wallet\" (userId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Wallet_userId_key",
+        "table": "Wallet"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Wallet_userId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_userId_key",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Wallet_userId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Wallet\" ADD CONSTRAINT \"Wallet_userId_key\" UNIQUE (\"userId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Wallet_userId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_userId_key",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Wallet.Wallet_userId_fkey",
+    "label": "Add foreign key \"Wallet_userId_fkey\" on \"Wallet\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Wallet_userId_fkey",
+        "table": "Wallet"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Wallet_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_userId_fkey",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Wallet_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Wallet\"\nADD CONSTRAINT \"Wallet_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Wallet_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_userId_fkey",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ]
+  }
+]

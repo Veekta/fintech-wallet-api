@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: fintech_wallet_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wallet_user
+      POSTGRES_PASSWORD: wallet_password
+      POSTGRES_DB: wallet_db
+    ports:
+      - '5433:5432'
+    volumes:
+      - wallet_postgres_data:/var/lib/postgresql
+
+volumes:
+  wallet_postgres_data:

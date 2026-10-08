@@ -1,0 +1,26 @@
+// use prisma-8
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         String   @default("USER")
+  status       String   @default("ACTIVE")
+  createdAt    TimestamptzString @default(now())
+  updatedAt    temporal.updatedAtString()
+
+  wallet Wallet?
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Decimal  @default(0)
+  currency  String   @default("NGN")
+  status    String   @default("ACTIVE")
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+
+  user User @relation(fields: [userId], references: [id])
+}
