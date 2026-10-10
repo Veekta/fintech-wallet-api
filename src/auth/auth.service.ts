@@ -126,4 +126,14 @@ export class AuthService {
       },
     };
   }
+
+  async logout(token: string | undefined) {
+    if (token) {
+      await this.refreshTokensService.revokeToken(token);
+    }
+
+    return {
+      message: 'Logged out successfully',
+    };
+  }
 }

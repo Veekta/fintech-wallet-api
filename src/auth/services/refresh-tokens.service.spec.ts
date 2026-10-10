@@ -211,4 +211,34 @@ describe('RefreshTokensService', () => {
       expect(mocks.create).not.toHaveBeenCalled();
     });
   });
+
+  describe('revokeToken', () => {
+    it('hashes the token and revokes the matching active token', async () => {
+      mocks.query.mockResolvedValue([{ id: 'refresh-123' }]);
+
+      await service.revokeToken('my-refresh-token');
+
+      const expectedHash = createHash('sha256')
+        .update('my-refresh-token')
+        .digest('hex');
+
+      expect(mocks.query).toHaveBeenCalledWith({
+        operation: 'conditional-revoke',
+      });
+
+      expect(mocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          revokedAt: expect.any(String),
+        }),
+      );
+    });
+
+    it('does not fail when the token does not match a stored token', async () => {
+      mocks.query.mockResolvedValue([]);
+
+      await expect(
+        service.revokeToken('unknown-refresh-token'),
+      ).resolves.toBeUndefined();
+    });
+  });
 });

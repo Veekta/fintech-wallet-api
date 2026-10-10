@@ -106,4 +106,19 @@ export class RefreshTokensService {
       };
     });
   }
+
+  async revokeToken(token: string): Promise<void> {
+    const tokenHash = this.hashToken(token);
+    const now = new Date().toISOString();
+
+    await db.transaction(async (tx) => {
+      await tx.query(
+        db.sql.public.RefreshToken.update({ revokedAt: now })
+          .where((fields, fns) => fns.eq(fields.tokenHash, tokenHash))
+          .where((fields, fns) => fns.eq(fields.revokedAt, null))
+          .returning('id')
+          .build(),
+      );
+    });
+  }
 }

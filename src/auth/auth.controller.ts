@@ -75,6 +75,27 @@ export class AuthController {
     return result;
   }
 
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const refreshToken = request.cookies?.['refresh_token'] as
+      string | undefined;
+
+    const result = await this.authService.logout(refreshToken);
+
+    response.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/v1/auth',
+    });
+
+    return result;
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   getMe(@Req() request: AuthenticatedRequest) {
