@@ -23,5 +23,6 @@ import { RefreshTokensService } from './services/refresh-tokens.service.js';
       }),
     }),
   ],
+  exports: [JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

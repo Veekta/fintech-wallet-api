@@ -97,6 +97,14 @@ POST /api/v1/auth/register
 409 Conflict
 ```
 
+**Wallet Creation Behavior**
+
+Upon successful registration, the system automatically creates a default NGN wallet for the new user within the same database transaction as user creation.
+
+Both operations must succeed together. If either operation fails, the entire transaction must roll back.
+
+Wallet creation is handled internally by the registration process and is not exposed as a separate endpoint in the MVP.
+
 ---
 
 ## 4.2 Login
@@ -118,8 +126,7 @@ POST /api/v1/auth/login
 
 ```json
 {
-  "accessToken": "access-token",
-  "refreshToken": "refresh-token"
+  "accessToken": "access-token"
 }
 ```
 
@@ -130,6 +137,10 @@ POST /api/v1/auth/login
 400 Bad Request
 401 Unauthorized
 ```
+
+**Refresh Token Cookie**
+
+The server sets the refresh token in an HTTP-only cookie named `refresh_token`. The cookie is configured with `SameSite=Strict`, uses the `/api/v1/auth` path, and is marked `Secure` in production.
 
 ---
 
@@ -156,18 +167,13 @@ Used to obtain a new access token using a valid refresh token.
 POST /api/v1/auth/logout
 ```
 
-Invalidates the user's authentication session or refresh token.
+Revokes the user's refresh token using the `refresh_token` HTTP-only cookie and clears the cookie from the client's browser. This prevents the revoked refresh token from being used to obtain a new access token.
 
-### Authentication
+The endpoint does not require a valid access token. It uses the refresh-token cookie to identify the session to revoke.
 
-Required.
+## Status Codes
 
-### Status Codes
-
-```text
-200 OK
-401 Unauthorized
-```
+- `200 OK` — Logout successful, including when the refresh-token cookie is missing or already invalid.
 
 ---
 
@@ -210,49 +216,7 @@ The `/me` endpoint prevents clients from arbitrarily requesting another user's p
 
 # 6. Wallet API
 
-## 6.1 Create Wallet
-
-```http
-POST /api/v1/wallets
-```
-
-Creates a wallet for the authenticated user.
-
-### Authentication
-
-Required.
-
-### Request
-
-```json
-{
-  "currency": "NGN"
-}
-```
-
-### Response
-
-```json
-{
-  "id": "wallet-uuid",
-  "currency": "NGN",
-  "balance": "0.00",
-  "status": "ACTIVE"
-}
-```
-
-### Status Codes
-
-```text
-201 Created
-400 Bad Request
-401 Unauthorized
-409 Conflict
-```
-
----
-
-## 6.2 Get Current Wallet
+## 6.1 Get Current Wallet
 
 ```http
 GET /api/v1/wallets/me
@@ -886,7 +850,6 @@ GET    /api/v1/users/me
 
 WALLETS
 
-POST   /api/v1/wallets
 GET    /api/v1/wallets/me
 
 

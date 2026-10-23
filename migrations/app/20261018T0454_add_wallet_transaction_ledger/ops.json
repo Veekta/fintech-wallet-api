@@ -1,0 +1,777 @@
+[
+  {
+    "id": "table.LedgerEntry",
+    "label": "Create table \"LedgerEntry\"",
+    "summary": "Creates table \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"LedgerEntry\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"LedgerEntry\"",
+        "sql": "CREATE TABLE \"public\".\"LedgerEntry\" (\n  \"amount\" numeric(19,2) NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"entryType\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"transactionId\" text NOT NULL,\n  \"walletId\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"LedgerEntry_entryType_check_7634fd97\" CHECK (\"entryType\" IN ('DEBIT', 'CREDIT'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"LedgerEntry\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.Transaction",
+    "label": "Create table \"Transaction\"",
+    "summary": "Creates table \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Transaction\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Transaction\"",
+        "sql": "CREATE TABLE \"public\".\"Transaction\" (\n  \"amount\" numeric(19,2) NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"currency\" text DEFAULT 'NGN' NOT NULL,\n  \"destinationWalletId\" text,\n  \"id\" text NOT NULL,\n  \"idempotencyKey\" text,\n  \"initiatedByUserId\" text NOT NULL,\n  \"sourceWalletId\" text,\n  \"status\" text DEFAULT 'PENDING' NOT NULL,\n  \"type\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"Transaction_status_check_bc4cb609\" CHECK (\"status\" IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED')),\n  CONSTRAINT \"Transaction_type_check_37ebe6f2\" CHECK (\"type\" IN ('TRANSFER', 'DEPOSIT', 'WITHDRAWAL'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Transaction\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "alterType.Wallet.balance",
+    "label": "Alter type of \"Wallet\".\"balance\" to numeric(19,2)",
+    "operationClass": "destructive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "balance",
+        "table": "Wallet"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"balance\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "Wallet",
+          "balance"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "alter type of \"balance\"",
+        "sql": "ALTER TABLE \"public\".\"Wallet\" ALTER COLUMN \"balance\" TYPE numeric(19,2) USING \"balance\"::numeric(19,2)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"balance\" has type \"numeric(19,2)\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": [
+          "public",
+          "Wallet",
+          "balance",
+          "numeric(19,2)"
+        ]
+      }
+    ],
+    "meta": {
+      "warning": "TABLE_REWRITE"
+    }
+  },
+  {
+    "id": "unique.Transaction.Transaction_initiatedByUserId_idempotencyKey_key",
+    "label": "Add unique constraint on \"Transaction\" (initiatedByUserId, idempotencyKey)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Transaction_initiatedByUserId_idempotencyKey_key",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Transaction_initiatedByUserId_idempotencyKey_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_initiatedByUserId_idempotencyKey_key",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Transaction_initiatedByUserId_idempotencyKey_key\"",
+        "sql": "ALTER TABLE \"public\".\"Transaction\" ADD CONSTRAINT \"Transaction_initiatedByUserId_idempotencyKey_key\" UNIQUE (\"initiatedByUserId\", \"idempotencyKey\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Transaction_initiatedByUserId_idempotencyKey_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_initiatedByUserId_idempotencyKey_key",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.User.User_role_check_1954e8c0",
+    "label": "Add check constraint \"User_role_check_1954e8c0\" on \"User\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "User_role_check_1954e8c0",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"User_role_check_1954e8c0\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_role_check_1954e8c0",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"User_role_check_1954e8c0\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD CONSTRAINT \"User_role_check_1954e8c0\" CHECK (\"role\" IN ('USER', 'ADMIN'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"User_role_check_1954e8c0\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_role_check_1954e8c0",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.User.User_status_check_5dec1c59",
+    "label": "Add check constraint \"User_status_check_5dec1c59\" on \"User\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "User_status_check_5dec1c59",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"User_status_check_5dec1c59\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_status_check_5dec1c59",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"User_status_check_5dec1c59\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD CONSTRAINT \"User_status_check_5dec1c59\" CHECK (\"status\" IN ('ACTIVE', 'SUSPENDED', 'DEACTIVATED'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"User_status_check_5dec1c59\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_status_check_5dec1c59",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.Wallet.Wallet_status_check_166abea7",
+    "label": "Add check constraint \"Wallet_status_check_166abea7\" on \"Wallet\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "Wallet_status_check_166abea7",
+        "table": "Wallet"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Wallet_status_check_166abea7\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_status_check_166abea7",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"Wallet_status_check_166abea7\"",
+        "sql": "ALTER TABLE \"public\".\"Wallet\" ADD CONSTRAINT \"Wallet_status_check_166abea7\" CHECK (\"status\" IN ('ACTIVE', 'FROZEN', 'CLOSED'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Wallet_status_check_166abea7\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Wallet_status_check_166abea7",
+          "public",
+          "\"public\".\"Wallet\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.LedgerEntry.LedgerEntry_transactionId_idx_d3180832",
+    "label": "Create index \"LedgerEntry_transactionId_idx_d3180832\" on \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "LedgerEntry_transactionId_idx_d3180832",
+        "table": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"LedgerEntry_transactionId_idx_d3180832\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_transactionId_idx_d3180832\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"LedgerEntry_transactionId_idx_d3180832\"",
+        "sql": "CREATE INDEX \"LedgerEntry_transactionId_idx_d3180832\" ON \"public\".\"LedgerEntry\" (\"transactionId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"LedgerEntry_transactionId_idx_d3180832\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_transactionId_idx_d3180832\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.LedgerEntry.LedgerEntry_walletId_createdAt_idx_5931d2fb",
+    "label": "Create index \"LedgerEntry_walletId_createdAt_idx_5931d2fb\" on \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "LedgerEntry_walletId_createdAt_idx_5931d2fb",
+        "table": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"LedgerEntry_walletId_createdAt_idx_5931d2fb\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_walletId_createdAt_idx_5931d2fb\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"LedgerEntry_walletId_createdAt_idx_5931d2fb\"",
+        "sql": "CREATE INDEX \"LedgerEntry_walletId_createdAt_idx_5931d2fb\" ON \"public\".\"LedgerEntry\" (\"walletId\", \"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"LedgerEntry_walletId_createdAt_idx_5931d2fb\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_walletId_createdAt_idx_5931d2fb\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.LedgerEntry.LedgerEntry_walletId_idx_2e003173",
+    "label": "Create index \"LedgerEntry_walletId_idx_2e003173\" on \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "LedgerEntry_walletId_idx_2e003173",
+        "table": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"LedgerEntry_walletId_idx_2e003173\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_walletId_idx_2e003173\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"LedgerEntry_walletId_idx_2e003173\"",
+        "sql": "CREATE INDEX \"LedgerEntry_walletId_idx_2e003173\" ON \"public\".\"LedgerEntry\" (\"walletId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"LedgerEntry_walletId_idx_2e003173\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"LedgerEntry_walletId_idx_2e003173\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Transaction.Transaction_createdAt_idx_9575dbd7",
+    "label": "Create index \"Transaction_createdAt_idx_9575dbd7\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Transaction_createdAt_idx_9575dbd7",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Transaction_createdAt_idx_9575dbd7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_createdAt_idx_9575dbd7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Transaction_createdAt_idx_9575dbd7\"",
+        "sql": "CREATE INDEX \"Transaction_createdAt_idx_9575dbd7\" ON \"public\".\"Transaction\" (\"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Transaction_createdAt_idx_9575dbd7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_createdAt_idx_9575dbd7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Transaction.Transaction_destinationWalletId_idx_b60ffc63",
+    "label": "Create index \"Transaction_destinationWalletId_idx_b60ffc63\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Transaction_destinationWalletId_idx_b60ffc63",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Transaction_destinationWalletId_idx_b60ffc63\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_destinationWalletId_idx_b60ffc63\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Transaction_destinationWalletId_idx_b60ffc63\"",
+        "sql": "CREATE INDEX \"Transaction_destinationWalletId_idx_b60ffc63\" ON \"public\".\"Transaction\" (\"destinationWalletId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Transaction_destinationWalletId_idx_b60ffc63\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_destinationWalletId_idx_b60ffc63\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Transaction.Transaction_initiatedByUserId_idx_cae329cf",
+    "label": "Create index \"Transaction_initiatedByUserId_idx_cae329cf\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Transaction_initiatedByUserId_idx_cae329cf",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Transaction_initiatedByUserId_idx_cae329cf\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_initiatedByUserId_idx_cae329cf\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Transaction_initiatedByUserId_idx_cae329cf\"",
+        "sql": "CREATE INDEX \"Transaction_initiatedByUserId_idx_cae329cf\" ON \"public\".\"Transaction\" (\"initiatedByUserId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Transaction_initiatedByUserId_idx_cae329cf\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_initiatedByUserId_idx_cae329cf\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Transaction.Transaction_sourceWalletId_idx_2e316d30",
+    "label": "Create index \"Transaction_sourceWalletId_idx_2e316d30\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Transaction_sourceWalletId_idx_2e316d30",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Transaction_sourceWalletId_idx_2e316d30\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_sourceWalletId_idx_2e316d30\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Transaction_sourceWalletId_idx_2e316d30\"",
+        "sql": "CREATE INDEX \"Transaction_sourceWalletId_idx_2e316d30\" ON \"public\".\"Transaction\" (\"sourceWalletId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Transaction_sourceWalletId_idx_2e316d30\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Transaction_sourceWalletId_idx_2e316d30\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.LedgerEntry.LedgerEntry_transactionId_fkey",
+    "label": "Add foreign key \"LedgerEntry_transactionId_fkey\" on \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "LedgerEntry_transactionId_fkey",
+        "table": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"LedgerEntry_transactionId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "LedgerEntry_transactionId_fkey",
+          "public",
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"LedgerEntry_transactionId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"LedgerEntry\"\nADD CONSTRAINT \"LedgerEntry_transactionId_fkey\"\nFOREIGN KEY (\"transactionId\")\nREFERENCES \"public\".\"Transaction\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"LedgerEntry_transactionId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "LedgerEntry_transactionId_fkey",
+          "public",
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.LedgerEntry.LedgerEntry_walletId_fkey",
+    "label": "Add foreign key \"LedgerEntry_walletId_fkey\" on \"LedgerEntry\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "LedgerEntry_walletId_fkey",
+        "table": "LedgerEntry"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"LedgerEntry_walletId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "LedgerEntry_walletId_fkey",
+          "public",
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"LedgerEntry_walletId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"LedgerEntry\"\nADD CONSTRAINT \"LedgerEntry_walletId_fkey\"\nFOREIGN KEY (\"walletId\")\nREFERENCES \"public\".\"Wallet\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"LedgerEntry_walletId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "LedgerEntry_walletId_fkey",
+          "public",
+          "\"public\".\"LedgerEntry\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Transaction.Transaction_initiatedByUserId_fkey",
+    "label": "Add foreign key \"Transaction_initiatedByUserId_fkey\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Transaction_initiatedByUserId_fkey",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Transaction_initiatedByUserId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_initiatedByUserId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Transaction_initiatedByUserId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Transaction\"\nADD CONSTRAINT \"Transaction_initiatedByUserId_fkey\"\nFOREIGN KEY (\"initiatedByUserId\")\nREFERENCES \"public\".\"User\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Transaction_initiatedByUserId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_initiatedByUserId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Transaction.Transaction_sourceWalletId_fkey",
+    "label": "Add foreign key \"Transaction_sourceWalletId_fkey\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Transaction_sourceWalletId_fkey",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Transaction_sourceWalletId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_sourceWalletId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Transaction_sourceWalletId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Transaction\"\nADD CONSTRAINT \"Transaction_sourceWalletId_fkey\"\nFOREIGN KEY (\"sourceWalletId\")\nREFERENCES \"public\".\"Wallet\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Transaction_sourceWalletId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_sourceWalletId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Transaction.Transaction_destinationWalletId_fkey",
+    "label": "Add foreign key \"Transaction_destinationWalletId_fkey\" on \"Transaction\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Transaction_destinationWalletId_fkey",
+        "table": "Transaction"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Transaction_destinationWalletId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_destinationWalletId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Transaction_destinationWalletId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Transaction\"\nADD CONSTRAINT \"Transaction_destinationWalletId_fkey\"\nFOREIGN KEY (\"destinationWalletId\")\nREFERENCES \"public\".\"Wallet\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Transaction_destinationWalletId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Transaction_destinationWalletId_fkey",
+          "public",
+          "\"public\".\"Transaction\""
+        ]
+      }
+    ]
+  }
+]

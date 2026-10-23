@@ -1,29 +1,71 @@
 // use prisma-8
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum TransactionType {
+  TRANSFER
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
   name         String?
-  role         String   @default("USER")
-  status       String   @default("ACTIVE")
+  role         UserRole @default(USER)
+  status UserStatus @default(ACTIVE)
   createdAt    TimestamptzString @default(now())
   updatedAt    temporal.updatedAtString()
 
   wallet Wallet?
   refreshTokens RefreshToken[]
+
+  initiatedTransactions Transaction[]
 }
 
 model Wallet {
   id        String   @id @default(uuid())
   userId    String   @unique
-  balance   Decimal  @default(0)
+  balance Numeric(19, 2) @default(0)
   currency  String   @default("NGN")
-  status    String   @default("ACTIVE")
+  status  WalletStatus @default(ACTIVE)
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 
   user User @relation(fields: [userId], references: [id])
+
+  outgoingTransactions Transaction[] @relation("SourceWallet")
+  incomingTransactions Transaction[] @relation("DestinationWallet")
+  ledgerEntries LedgerEntry[]
 }
 
 model RefreshToken {
@@ -35,4 +77,65 @@ model RefreshToken {
   createdAt TimestamptzString @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+
+
+model Transaction {
+  id                  String   @id @default(uuid())
+  initiatedByUserId   String
+  type   TransactionType
+  status TransactionStatus @default(PENDING)
+  amount Numeric(19, 2)
+  currency            String   @default("NGN")
+  sourceWalletId      String?
+  destinationWalletId String?
+  idempotencyKey      String?
+  createdAt           TimestamptzString @default(now())
+  updatedAt           temporal.updatedAtString()
+
+  initiatedByUser User @relation(
+    fields: [initiatedByUserId],
+    references: [id]
+  )
+
+  sourceWallet Wallet? @relation(
+    "SourceWallet",
+    fields: [sourceWalletId],
+    references: [id]
+  )
+
+  destinationWallet Wallet? @relation(
+    "DestinationWallet",
+    fields: [destinationWalletId],
+    references: [id]
+  )
+
+  ledgerEntries LedgerEntry[]
+
+  @@unique([initiatedByUserId, idempotencyKey])
+  @@index([sourceWalletId])
+  @@index([destinationWalletId])
+  @@index([createdAt])
+}
+
+model LedgerEntry {
+  id            String   @id @default(uuid())
+  transactionId String
+  walletId      String
+  entryType LedgerEntryType
+  amount Numeric(19, 2)
+  createdAt     TimestamptzString @default(now())
+
+  transaction Transaction @relation(
+    fields: [transactionId],
+    references: [id]
+  )
+
+  wallet Wallet @relation(
+    fields: [walletId],
+    references: [id]
+  )
+
+  @@index([transactionId])
+  @@index([walletId, createdAt])
 }
