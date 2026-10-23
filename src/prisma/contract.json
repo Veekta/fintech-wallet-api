@@ -4,8 +4,16 @@
   "target": "postgres",
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
+    "LedgerEntry": {
+      "model": "LedgerEntry",
+      "namespace": "public"
+    },
     "RefreshToken": {
       "model": "RefreshToken",
+      "namespace": "public"
+    },
+    "Transaction": {
+      "model": "Transaction",
       "namespace": "public"
     },
     "User": {
@@ -20,7 +28,225 @@
   "domain": {
     "namespaces": {
       "public": {
+        "enum": {
+          "LedgerEntryType": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "DEBIT",
+                "value": "DEBIT"
+              },
+              {
+                "name": "CREDIT",
+                "value": "CREDIT"
+              }
+            ]
+          },
+          "TransactionStatus": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "PENDING",
+                "value": "PENDING"
+              },
+              {
+                "name": "PROCESSING",
+                "value": "PROCESSING"
+              },
+              {
+                "name": "COMPLETED",
+                "value": "COMPLETED"
+              },
+              {
+                "name": "FAILED",
+                "value": "FAILED"
+              },
+              {
+                "name": "REVERSED",
+                "value": "REVERSED"
+              }
+            ]
+          },
+          "TransactionType": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "TRANSFER",
+                "value": "TRANSFER"
+              },
+              {
+                "name": "DEPOSIT",
+                "value": "DEPOSIT"
+              },
+              {
+                "name": "WITHDRAWAL",
+                "value": "WITHDRAWAL"
+              }
+            ]
+          },
+          "UserRole": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "USER",
+                "value": "USER"
+              },
+              {
+                "name": "ADMIN",
+                "value": "ADMIN"
+              }
+            ]
+          },
+          "UserStatus": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "ACTIVE",
+                "value": "ACTIVE"
+              },
+              {
+                "name": "SUSPENDED",
+                "value": "SUSPENDED"
+              },
+              {
+                "name": "DEACTIVATED",
+                "value": "DEACTIVATED"
+              }
+            ]
+          },
+          "WalletStatus": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "ACTIVE",
+                "value": "ACTIVE"
+              },
+              {
+                "name": "FROZEN",
+                "value": "FROZEN"
+              },
+              {
+                "name": "CLOSED",
+                "value": "CLOSED"
+              }
+            ]
+          }
+        },
         "models": {
+          "LedgerEntry": {
+            "fields": {
+              "amount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "entryType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "LedgerEntryType",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "transactionId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "walletId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "transaction": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "transactionId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Transaction",
+                  "namespace": "public"
+                }
+              },
+              "wallet": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "walletId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Wallet",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "entryType": {
+                  "column": "entryType"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "transactionId": {
+                  "column": "transactionId"
+                },
+                "walletId": {
+                  "column": "walletId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "LedgerEntry"
+            }
+          },
           "RefreshToken": {
             "fields": {
               "createdAt": {
@@ -109,6 +335,207 @@
               "table": "RefreshToken"
             }
           },
+          "Transaction": {
+            "fields": {
+              "amount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "currency": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "destinationWalletId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "idempotencyKey": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "initiatedByUserId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceWalletId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "status": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "TransactionStatus",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "TransactionType",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "destinationWallet": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "destinationWalletId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Wallet",
+                  "namespace": "public"
+                }
+              },
+              "initiatedByUser": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "initiatedByUserId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "ledgerEntries": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "transactionId"
+                  ]
+                },
+                "to": {
+                  "model": "LedgerEntry",
+                  "namespace": "public"
+                }
+              },
+              "sourceWallet": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "sourceWalletId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Wallet",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "currency": {
+                  "column": "currency"
+                },
+                "destinationWalletId": {
+                  "column": "destinationWalletId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "idempotencyKey": {
+                  "column": "idempotencyKey"
+                },
+                "initiatedByUserId": {
+                  "column": "initiatedByUserId"
+                },
+                "sourceWalletId": {
+                  "column": "sourceWalletId"
+                },
+                "status": {
+                  "column": "status"
+                },
+                "type": {
+                  "column": "type"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Transaction"
+            }
+          },
           "User": {
             "fields": {
               "createdAt": {
@@ -151,6 +578,12 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "UserRole",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "status": {
@@ -158,6 +591,12 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "UserStatus",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "updatedAt": {
@@ -169,6 +608,21 @@
               }
             },
             "relations": {
+              "initiatedTransactions": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "initiatedByUserId"
+                  ]
+                },
+                "to": {
+                  "model": "Transaction",
+                  "namespace": "public"
+                }
+              },
               "refreshTokens": {
                 "cardinality": "1:N",
                 "on": {
@@ -238,7 +692,11 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
                 }
               },
               "createdAt": {
@@ -267,6 +725,12 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "WalletStatus",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "updatedAt": {
@@ -285,6 +749,51 @@
               }
             },
             "relations": {
+              "incomingTransactions": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "destinationWalletId"
+                  ]
+                },
+                "to": {
+                  "model": "Transaction",
+                  "namespace": "public"
+                }
+              },
+              "ledgerEntries": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "walletId"
+                  ]
+                },
+                "to": {
+                  "model": "LedgerEntry",
+                  "namespace": "public"
+                }
+              },
+              "outgoingTransactions": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "sourceWalletId"
+                  ]
+                },
+                "to": {
+                  "model": "Transaction",
+                  "namespace": "public"
+                }
+              },
               "user": {
                 "cardinality": "N:1",
                 "nullable": false,
@@ -339,6 +848,128 @@
       "public": {
         "entries": {
           "table": {
+            "LedgerEntry": {
+              "checks": [
+                {
+                  "expression": "\"entryType\" IN ('DEBIT', 'CREDIT')",
+                  "name": "LedgerEntry_entryType_check_7634fd97",
+                  "prefix": "LedgerEntry_entryType_check"
+                }
+              ],
+              "columns": {
+                "amount": {
+                  "codecId": "pg/numeric@1",
+                  "nativeType": "numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "entryType": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "LedgerEntryType",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "transactionId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "walletId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "source": {
+                    "columns": [
+                      "transactionId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "LedgerEntry"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Transaction"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "walletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "LedgerEntry"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Wallet"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "transactionId"
+                  ],
+                  "name": "LedgerEntry_transactionId_idx_d3180832",
+                  "prefix": "LedgerEntry_transactionId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "walletId",
+                    "createdAt"
+                  ],
+                  "name": "LedgerEntry_walletId_createdAt_idx_5931d2fb",
+                  "prefix": "LedgerEntry_walletId_createdAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "walletId"
+                  ],
+                  "name": "LedgerEntry_walletId_idx_2e003173",
+                  "prefix": "LedgerEntry_walletId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "RefreshToken": {
               "columns": {
                 "createdAt": {
@@ -417,7 +1048,215 @@
                 }
               ]
             },
+            "Transaction": {
+              "checks": [
+                {
+                  "expression": "\"status\" IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED')",
+                  "name": "Transaction_status_check_bc4cb609",
+                  "prefix": "Transaction_status_check"
+                },
+                {
+                  "expression": "\"type\" IN ('TRANSFER', 'DEPOSIT', 'WITHDRAWAL')",
+                  "name": "Transaction_type_check_37ebe6f2",
+                  "prefix": "Transaction_type_check"
+                }
+              ],
+              "columns": {
+                "amount": {
+                  "codecId": "pg/numeric@1",
+                  "nativeType": "numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "currency": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "NGN"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "destinationWalletId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "idempotencyKey": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "initiatedByUserId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "sourceWalletId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "status": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "PENDING"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "TransactionStatus",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "type": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "TransactionType",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "source": {
+                    "columns": [
+                      "initiatedByUserId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Transaction"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "sourceWalletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Transaction"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Wallet"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "destinationWalletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Transaction"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Wallet"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "createdAt"
+                  ],
+                  "name": "Transaction_createdAt_idx_9575dbd7",
+                  "prefix": "Transaction_createdAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "destinationWalletId"
+                  ],
+                  "name": "Transaction_destinationWalletId_idx_b60ffc63",
+                  "prefix": "Transaction_destinationWalletId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "initiatedByUserId"
+                  ],
+                  "name": "Transaction_initiatedByUserId_idx_cae329cf",
+                  "prefix": "Transaction_initiatedByUserId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "sourceWalletId"
+                  ],
+                  "name": "Transaction_sourceWalletId_idx_2e316d30",
+                  "prefix": "Transaction_sourceWalletId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "initiatedByUserId",
+                    "idempotencyKey"
+                  ]
+                }
+              ]
+            },
             "User": {
+              "checks": [
+                {
+                  "expression": "\"role\" IN ('USER', 'ADMIN')",
+                  "name": "User_role_check_1954e8c0",
+                  "prefix": "User_role_check"
+                },
+                {
+                  "expression": "\"status\" IN ('ACTIVE', 'SUSPENDED', 'DEACTIVATED')",
+                  "name": "User_status_check_5dec1c59",
+                  "prefix": "User_status_check"
+                }
+              ],
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -455,7 +1294,13 @@
                     "value": "USER"
                   },
                   "nativeType": "text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "UserRole",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "status": {
                   "codecId": "pg/text@1",
@@ -464,7 +1309,13 @@
                     "value": "ACTIVE"
                   },
                   "nativeType": "text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "UserStatus",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -488,6 +1339,13 @@
               ]
             },
             "Wallet": {
+              "checks": [
+                {
+                  "expression": "\"status\" IN ('ACTIVE', 'FROZEN', 'CLOSED')",
+                  "name": "Wallet_status_check_166abea7",
+                  "prefix": "Wallet_status_check"
+                }
+              ],
               "columns": {
                 "balance": {
                   "codecId": "pg/numeric@1",
@@ -496,7 +1354,11 @@
                     "value": "0"
                   },
                   "nativeType": "numeric",
-                  "nullable": false
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 19,
+                    "scale": 2
+                  }
                 },
                 "createdAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -528,7 +1390,13 @@
                     "value": "ACTIVE"
                   },
                   "nativeType": "text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "WalletStatus",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -573,16 +1441,66 @@
                 }
               ]
             }
+          },
+          "valueSet": {
+            "LedgerEntryType": {
+              "kind": "valueSet",
+              "values": [
+                "DEBIT",
+                "CREDIT"
+              ]
+            },
+            "TransactionStatus": {
+              "kind": "valueSet",
+              "values": [
+                "PENDING",
+                "PROCESSING",
+                "COMPLETED",
+                "FAILED",
+                "REVERSED"
+              ]
+            },
+            "TransactionType": {
+              "kind": "valueSet",
+              "values": [
+                "TRANSFER",
+                "DEPOSIT",
+                "WITHDRAWAL"
+              ]
+            },
+            "UserRole": {
+              "kind": "valueSet",
+              "values": [
+                "USER",
+                "ADMIN"
+              ]
+            },
+            "UserStatus": {
+              "kind": "valueSet",
+              "values": [
+                "ACTIVE",
+                "SUSPENDED",
+                "DEACTIVATED"
+              ]
+            },
+            "WalletStatus": {
+              "kind": "valueSet",
+              "values": [
+                "ACTIVE",
+                "FROZEN",
+                "CLOSED"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "fa876b2c174ebccdf78763370321df1f0a45692af96cf61efcc7981b84b942f3"
+    "storageHash": "cf7be466fe68a6bccb73dd45439592af2e79a96ddd6f11e24282eda05350d897"
   },
   "execution": {
-    "executionHash": "2052dfd7007ec2b2373e988351df65161082e807ecce77252ab6fc6d8f2a5e44",
+    "executionHash": "fe9034ab770d2c9a5535faa8615a012fef5921bc36c8ffe248d5e25b05442188",
     "mutations": {
       "defaults": [
         {
@@ -591,8 +1509,45 @@
             "kind": "generator"
           },
           "ref": {
+            "entry": "LedgerEntry",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
             "entry": "RefreshToken",
             "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Transaction",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Transaction",
+            "field": "updatedAt",
             "namespace": "public"
           }
         },

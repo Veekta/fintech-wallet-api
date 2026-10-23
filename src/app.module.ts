@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { WalletsModule } from './wallets/wallets.module.js';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { AuthModule } from './auth/auth.module.js';
     }),
     UsersModule,
     AuthModule,
+    WalletsModule,
   ],
   controllers: [],
   providers: [],

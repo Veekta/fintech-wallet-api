@@ -34,9 +34,9 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'fa876b2c174ebccdf78763370321df1f0a45692af96cf61efcc7981b84b942f3'>;
+  StorageHashBase<'cf7be466fe68a6bccb73dd45439592af2e79a96ddd6f11e24282eda05350d897'>;
 export type ExecutionHash =
-  ExecutionHashBase<'2052dfd7007ec2b2373e988351df65161082e807ecce77252ab6fc6d8f2a5e44'>;
+  ExecutionHashBase<'fe9034ab770d2c9a5535faa8615a012fef5921bc36c8ffe248d5e25b05442188'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -250,6 +250,14 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 
 export type FieldOutputTypes = {
   readonly public: {
+    readonly LedgerEntry: {
+      readonly amount: Numeric<19, 2>;
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly entryType: 'DEBIT' | 'CREDIT';
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly transactionId: CodecTypes['pg/text@1']['output'];
+      readonly walletId: CodecTypes['pg/text@1']['output'];
+    };
     readonly RefreshToken: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -258,22 +266,35 @@ export type FieldOutputTypes = {
       readonly tokenHash: CodecTypes['pg/text@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
+    readonly Transaction: {
+      readonly amount: Numeric<19, 2>;
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly currency: CodecTypes['pg/text@1']['output'];
+      readonly destinationWalletId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly idempotencyKey: CodecTypes['pg/text@1']['output'] | null;
+      readonly initiatedByUserId: CodecTypes['pg/text@1']['output'];
+      readonly sourceWalletId: CodecTypes['pg/text@1']['output'] | null;
+      readonly status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+      readonly type: 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
+      readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    };
     readonly User: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
       readonly passwordHash: CodecTypes['pg/text@1']['output'];
-      readonly role: CodecTypes['pg/text@1']['output'];
-      readonly status: CodecTypes['pg/text@1']['output'];
+      readonly role: 'USER' | 'ADMIN';
+      readonly status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     };
     readonly Wallet: {
-      readonly balance: CodecTypes['pg/numeric@1']['output'];
+      readonly balance: Numeric<19, 2>;
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly currency: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
-      readonly status: CodecTypes['pg/text@1']['output'];
+      readonly status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
@@ -281,6 +302,14 @@ export type FieldOutputTypes = {
 };
 export type FieldInputTypes = {
   readonly public: {
+    readonly LedgerEntry: {
+      readonly amount: CodecTypes['pg/numeric@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly entryType: 'DEBIT' | 'CREDIT';
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly transactionId: CodecTypes['pg/text@1']['input'];
+      readonly walletId: CodecTypes['pg/text@1']['input'];
+    };
     readonly RefreshToken: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['input'];
@@ -289,14 +318,27 @@ export type FieldInputTypes = {
       readonly tokenHash: CodecTypes['pg/text@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
+    readonly Transaction: {
+      readonly amount: CodecTypes['pg/numeric@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly currency: CodecTypes['pg/text@1']['input'];
+      readonly destinationWalletId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly idempotencyKey: CodecTypes['pg/text@1']['input'] | null;
+      readonly initiatedByUserId: CodecTypes['pg/text@1']['input'];
+      readonly sourceWalletId: CodecTypes['pg/text@1']['input'] | null;
+      readonly status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+      readonly type: 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
+      readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
+    };
     readonly User: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
       readonly passwordHash: CodecTypes['pg/text@1']['input'];
-      readonly role: CodecTypes['pg/text@1']['input'];
-      readonly status: CodecTypes['pg/text@1']['input'];
+      readonly role: 'USER' | 'ADMIN';
+      readonly status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
     readonly Wallet: {
@@ -304,7 +346,7 @@ export type FieldInputTypes = {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly currency: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
-      readonly status: CodecTypes['pg/text@1']['input'];
+      readonly status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
@@ -312,6 +354,14 @@ export type FieldInputTypes = {
 };
 export type StorageColumnTypes = {
   readonly public: {
+    readonly LedgerEntry: {
+      readonly amount: Numeric<19, 2>;
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly entryType: 'DEBIT' | 'CREDIT';
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly transactionId: CodecTypes['pg/text@1']['output'];
+      readonly walletId: CodecTypes['pg/text@1']['output'];
+    };
     readonly RefreshToken: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -320,22 +370,35 @@ export type StorageColumnTypes = {
       readonly tokenHash: CodecTypes['pg/text@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
+    readonly Transaction: {
+      readonly amount: Numeric<19, 2>;
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly currency: CodecTypes['pg/text@1']['output'];
+      readonly destinationWalletId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly idempotencyKey: CodecTypes['pg/text@1']['output'] | null;
+      readonly initiatedByUserId: CodecTypes['pg/text@1']['output'];
+      readonly sourceWalletId: CodecTypes['pg/text@1']['output'] | null;
+      readonly status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+      readonly type: 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
+      readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    };
     readonly User: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
       readonly passwordHash: CodecTypes['pg/text@1']['output'];
-      readonly role: CodecTypes['pg/text@1']['output'];
-      readonly status: CodecTypes['pg/text@1']['output'];
+      readonly role: 'USER' | 'ADMIN';
+      readonly status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     };
     readonly Wallet: {
-      readonly balance: CodecTypes['pg/numeric@1']['output'];
+      readonly balance: Numeric<19, 2>;
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly currency: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
-      readonly status: CodecTypes['pg/text@1']['output'];
+      readonly status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
@@ -343,6 +406,14 @@ export type StorageColumnTypes = {
 };
 export type StorageColumnInputTypes = {
   readonly public: {
+    readonly LedgerEntry: {
+      readonly amount: CodecTypes['pg/numeric@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly entryType: 'DEBIT' | 'CREDIT';
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly transactionId: CodecTypes['pg/text@1']['input'];
+      readonly walletId: CodecTypes['pg/text@1']['input'];
+    };
     readonly RefreshToken: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['input'];
@@ -351,14 +422,27 @@ export type StorageColumnInputTypes = {
       readonly tokenHash: CodecTypes['pg/text@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
+    readonly Transaction: {
+      readonly amount: CodecTypes['pg/numeric@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly currency: CodecTypes['pg/text@1']['input'];
+      readonly destinationWalletId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly idempotencyKey: CodecTypes['pg/text@1']['input'] | null;
+      readonly initiatedByUserId: CodecTypes['pg/text@1']['input'];
+      readonly sourceWalletId: CodecTypes['pg/text@1']['input'] | null;
+      readonly status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+      readonly type: 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
+      readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
+    };
     readonly User: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
       readonly passwordHash: CodecTypes['pg/text@1']['input'];
-      readonly role: CodecTypes['pg/text@1']['input'];
-      readonly status: CodecTypes['pg/text@1']['input'];
+      readonly role: 'USER' | 'ADMIN';
+      readonly status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
     readonly Wallet: {
@@ -366,7 +450,7 @@ export type StorageColumnInputTypes = {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly currency: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
-      readonly status: CodecTypes['pg/text@1']['input'];
+      readonly status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
@@ -374,6 +458,17 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_LedgerEntry = {
+    amount: Numeric<19, 2>;
+    createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    entryType: 'DEBIT' | 'CREDIT';
+    id: CodecTypes['pg/text@1']['output'];
+    transactionId: CodecTypes['pg/text@1']['output'];
+    walletId: CodecTypes['pg/text@1']['output'];
+    transaction: public_Transaction;
+    wallet: public_Wallet;
+    readonly [RelationKeys]?: 'transaction' | 'wallet';
+  };
   export type public_RefreshToken = {
     createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
     expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -384,35 +479,61 @@ export namespace Models {
     user: public_User;
     readonly [RelationKeys]?: 'user';
   };
+  export type public_Transaction = {
+    amount: Numeric<19, 2>;
+    createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    currency: CodecTypes['pg/text@1']['output'];
+    destinationWalletId: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    idempotencyKey: CodecTypes['pg/text@1']['output'] | null;
+    initiatedByUserId: CodecTypes['pg/text@1']['output'];
+    sourceWalletId: CodecTypes['pg/text@1']['output'] | null;
+    status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+    type: 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
+    updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    destinationWallet: public_Wallet | null;
+    initiatedByUser: public_User;
+    ledgerEntries: public_LedgerEntry[];
+    sourceWallet: public_Wallet | null;
+    readonly [RelationKeys]?:
+      'destinationWallet' | 'initiatedByUser' | 'ledgerEntries' | 'sourceWallet';
+  };
   export type public_User = {
     createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
     email: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
     passwordHash: CodecTypes['pg/text@1']['output'];
-    role: CodecTypes['pg/text@1']['output'];
-    status: CodecTypes['pg/text@1']['output'];
+    role: 'USER' | 'ADMIN';
+    status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
     updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    initiatedTransactions: public_Transaction[];
     refreshTokens: public_RefreshToken[];
     wallet: public_Wallet | null;
-    readonly [RelationKeys]?: 'refreshTokens' | 'wallet';
+    readonly [RelationKeys]?: 'initiatedTransactions' | 'refreshTokens' | 'wallet';
   };
   export type public_Wallet = {
-    balance: CodecTypes['pg/numeric@1']['output'];
+    balance: Numeric<19, 2>;
     createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
     currency: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
-    status: CodecTypes['pg/text@1']['output'];
+    status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
     updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     userId: CodecTypes['pg/text@1']['output'];
+    incomingTransactions: public_Transaction[];
+    ledgerEntries: public_LedgerEntry[];
+    outgoingTransactions: public_Transaction[];
     user: public_User;
-    readonly [RelationKeys]?: 'user';
+    readonly [RelationKeys]?:
+      'incomingTransactions' | 'ledgerEntries' | 'outgoingTransactions' | 'user';
   };
 }
 
 export declare const models: {
   public: {
+    LedgerEntry: Models.public_LedgerEntry;
     RefreshToken: Models.public_RefreshToken;
+    Transaction: Models.public_Transaction;
     User: Models.public_User;
     Wallet: Models.public_Wallet;
   };
@@ -436,6 +557,90 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly LedgerEntry: {
+              columns: {
+                readonly amount: {
+                  readonly nativeType: 'numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
+                };
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly entryType: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly transactionId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly walletId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'LedgerEntry_transactionId_idx_d3180832';
+                  readonly prefix: 'LedgerEntry_transactionId_idx';
+                  readonly columns: readonly ['transactionId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'LedgerEntry_walletId_createdAt_idx_5931d2fb';
+                  readonly prefix: 'LedgerEntry_walletId_createdAt_idx';
+                  readonly columns: readonly ['walletId', 'createdAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'LedgerEntry_walletId_idx_2e003173';
+                  readonly prefix: 'LedgerEntry_walletId_idx';
+                  readonly columns: readonly ['walletId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'LedgerEntry';
+                    readonly columns: readonly ['transactionId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Transaction';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'LedgerEntry';
+                    readonly columns: readonly ['walletId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Wallet';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly RefreshToken: {
               columns: {
                 readonly createdAt: {
@@ -490,6 +695,143 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly Transaction: {
+              columns: {
+                readonly amount: {
+                  readonly nativeType: 'numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
+                };
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly currency: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/text@1', 'NGN'>;
+                  };
+                };
+                readonly destinationWalletId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly idempotencyKey: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly initiatedByUserId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly sourceWalletId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly status: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/text@1', 'PENDING'>;
+                  };
+                };
+                readonly type: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly updatedAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [
+                { readonly columns: readonly ['initiatedByUserId', 'idempotencyKey'] },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'Transaction_createdAt_idx_9575dbd7';
+                  readonly prefix: 'Transaction_createdAt_idx';
+                  readonly columns: readonly ['createdAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Transaction_destinationWalletId_idx_b60ffc63';
+                  readonly prefix: 'Transaction_destinationWalletId_idx';
+                  readonly columns: readonly ['destinationWalletId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Transaction_initiatedByUserId_idx_cae329cf';
+                  readonly prefix: 'Transaction_initiatedByUserId_idx';
+                  readonly columns: readonly ['initiatedByUserId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Transaction_sourceWalletId_idx_2e316d30';
+                  readonly prefix: 'Transaction_sourceWalletId_idx';
+                  readonly columns: readonly ['sourceWalletId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Transaction';
+                    readonly columns: readonly ['initiatedByUserId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Transaction';
+                    readonly columns: readonly ['sourceWalletId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Wallet';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Transaction';
+                    readonly columns: readonly ['destinationWalletId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Wallet';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -562,6 +904,7 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'pg/numeric@1', '0'>;
                   };
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
                 };
                 readonly createdAt: {
                   readonly nativeType: 'timestamptz';
@@ -622,6 +965,38 @@ type ContractBase = Omit<
               ];
             };
           };
+          readonly valueSet: {
+            readonly LedgerEntryType: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['DEBIT', 'CREDIT'];
+            };
+            readonly TransactionStatus: {
+              readonly kind: 'valueSet';
+              readonly values: readonly [
+                'PENDING',
+                'PROCESSING',
+                'COMPLETED',
+                'FAILED',
+                'REVERSED',
+              ];
+            };
+            readonly TransactionType: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['TRANSFER', 'DEPOSIT', 'WITHDRAWAL'];
+            };
+            readonly UserRole: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['USER', 'ADMIN'];
+            };
+            readonly UserStatus: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['ACTIVE', 'SUSPENDED', 'DEACTIVATED'];
+            };
+            readonly WalletStatus: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['ACTIVE', 'FROZEN', 'CLOSED'];
+            };
+          };
         };
       };
     };
@@ -632,9 +1007,17 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly LedgerEntry: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'LedgerEntry';
+    };
     readonly RefreshToken: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'RefreshToken';
+    };
+    readonly Transaction: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'Transaction';
     };
     readonly User: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly Wallet: { readonly namespace: 'public' & NamespaceId; readonly model: 'Wallet' };
@@ -643,6 +1026,79 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly public: {
         readonly models: {
+          readonly LedgerEntry: {
+            readonly fields: {
+              readonly amount: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+              readonly entryType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly transactionId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly walletId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly transaction: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Transaction';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['transactionId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly wallet: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Wallet';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['walletId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'LedgerEntry';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly amount: { readonly column: 'amount' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly entryType: { readonly column: 'entryType' };
+                readonly id: { readonly column: 'id' };
+                readonly transactionId: { readonly column: 'transactionId' };
+                readonly walletId: { readonly column: 'walletId' };
+              };
+            };
+          };
           readonly RefreshToken: {
             readonly fields: {
               readonly createdAt: {
@@ -703,6 +1159,127 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly Transaction: {
+            readonly fields: {
+              readonly amount: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+              readonly currency: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly destinationWalletId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly idempotencyKey: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly initiatedByUserId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly sourceWalletId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly status: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly destinationWallet: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Wallet';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['destinationWalletId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly initiatedByUser: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['initiatedByUserId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly ledgerEntries: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'LedgerEntry';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['transactionId'];
+                };
+              };
+              readonly sourceWallet: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Wallet';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['sourceWalletId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Transaction';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly amount: { readonly column: 'amount' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly currency: { readonly column: 'currency' };
+                readonly destinationWalletId: { readonly column: 'destinationWalletId' };
+                readonly id: { readonly column: 'id' };
+                readonly idempotencyKey: { readonly column: 'idempotencyKey' };
+                readonly initiatedByUserId: { readonly column: 'initiatedByUserId' };
+                readonly sourceWalletId: { readonly column: 'sourceWalletId' };
+                readonly status: { readonly column: 'status' };
+                readonly type: { readonly column: 'type' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
           readonly User: {
             readonly fields: {
               readonly createdAt: {
@@ -745,6 +1322,17 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly initiatedTransactions: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Transaction';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['initiatedByUserId'];
+                };
+              };
               readonly refreshTokens: {
                 readonly to: {
                   readonly namespace: 'public' & NamespaceId;
@@ -788,7 +1376,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly balance: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly typeParams: { readonly precision: 19; readonly scale: 2 };
+                };
               };
               readonly createdAt: {
                 readonly nullable: false;
@@ -822,6 +1414,39 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly incomingTransactions: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Transaction';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['destinationWalletId'];
+                };
+              };
+              readonly ledgerEntries: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'LedgerEntry';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['walletId'];
+                };
+              };
+              readonly outgoingTransactions: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Transaction';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['sourceWalletId'];
+                };
+              };
               readonly user: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
                 readonly cardinality: 'N:1';
@@ -845,6 +1470,56 @@ type ContractBase = Omit<
                 readonly userId: { readonly column: 'userId' };
               };
             };
+          };
+        };
+        readonly enum: {
+          readonly LedgerEntryType: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'DEBIT'; readonly value: 'DEBIT' },
+              { readonly name: 'CREDIT'; readonly value: 'CREDIT' },
+            ];
+          };
+          readonly TransactionStatus: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'PENDING'; readonly value: 'PENDING' },
+              { readonly name: 'PROCESSING'; readonly value: 'PROCESSING' },
+              { readonly name: 'COMPLETED'; readonly value: 'COMPLETED' },
+              { readonly name: 'FAILED'; readonly value: 'FAILED' },
+              { readonly name: 'REVERSED'; readonly value: 'REVERSED' },
+            ];
+          };
+          readonly TransactionType: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'TRANSFER'; readonly value: 'TRANSFER' },
+              { readonly name: 'DEPOSIT'; readonly value: 'DEPOSIT' },
+              { readonly name: 'WITHDRAWAL'; readonly value: 'WITHDRAWAL' },
+            ];
+          };
+          readonly UserRole: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'USER'; readonly value: 'USER' },
+              { readonly name: 'ADMIN'; readonly value: 'ADMIN' },
+            ];
+          };
+          readonly UserStatus: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'ACTIVE'; readonly value: 'ACTIVE' },
+              { readonly name: 'SUSPENDED'; readonly value: 'SUSPENDED' },
+              { readonly name: 'DEACTIVATED'; readonly value: 'DEACTIVATED' },
+            ];
+          };
+          readonly WalletStatus: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'ACTIVE'; readonly value: 'ACTIVE' },
+              { readonly name: 'FROZEN'; readonly value: 'FROZEN' },
+              { readonly name: 'CLOSED'; readonly value: 'CLOSED' },
+            ];
           };
         };
       };
@@ -878,8 +1553,33 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
+            readonly entry: 'LedgerEntry';
+            readonly field: 'id';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
+          readonly ref: {
             readonly entry: 'RefreshToken';
             readonly field: 'id';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Transaction';
+            readonly field: 'id';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Transaction';
+            readonly field: 'updatedAt';
             readonly namespace: 'public';
           };
         },
