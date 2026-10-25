@@ -1,18 +1,25 @@
-import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WalletsController } from './wallets.controller.js';
 import { WalletsService } from './wallets.service.js';
 import { TransfersService } from './transfers.service.js';
+import { TransactionHistoryService } from './transaction-history.service.js';
+import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 
 describe('WalletsController', () => {
   let controller: WalletsController;
+
   let walletsService: {
     findByUserId: ReturnType<typeof vi.fn>;
   };
+
   let transfersService: {
     transfer: ReturnType<typeof vi.fn>;
+  };
+
+  let transactionHistoryService: {
+    findByUserId: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -24,11 +31,19 @@ describe('WalletsController', () => {
       transfer: vi.fn(),
     };
 
+    transactionHistoryService = {
+      findByUserId: vi.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WalletsController],
       providers: [
         { provide: WalletsService, useValue: walletsService },
         { provide: TransfersService, useValue: transfersService },
+        {
+          provide: TransactionHistoryService,
+          useValue: transactionHistoryService,
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -58,6 +73,48 @@ describe('WalletsController', () => {
 
     expect(result).toEqual(wallet);
     expect(walletsService.findByUserId).toHaveBeenCalledWith('user-123');
+  });
+
+  it('passes the authenticated user and filters to TransactionHistoryService', async () => {
+    const query = {
+      type: 'TRANSFER',
+      status: 'COMPLETED',
+      page: 1,
+      limit: 20,
+    } as TransactionHistoryQueryDto;
+
+    const historyResult = {
+      data: [
+        {
+          id: 'transaction-123',
+          type: 'TRANSFER',
+          status: 'COMPLETED',
+          amount: '100.00',
+          currency: 'NGN',
+        },
+      ],
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+      },
+    };
+
+    transactionHistoryService.findByUserId.mockResolvedValue(historyResult);
+
+    const result = await controller.getTransactionHistory(
+      {
+        user: { sub: 'user-123', role: 'USER' },
+      } as never,
+      query,
+    );
+
+    expect(result).toEqual(historyResult);
+    expect(transactionHistoryService.findByUserId).toHaveBeenCalledWith(
+      'user-123',
+      query,
+    );
   });
 
   it('passes the authenticated user, DTO, and idempotency key to TransfersService', async () => {

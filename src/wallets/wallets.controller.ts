@@ -6,6 +6,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
@@ -13,6 +14,8 @@ import { WalletsService } from './wallets.service.js';
 import { validateIdempotencyKey } from './utils/validate-idempotency-key.js';
 import { TransferDto } from './dto/transfer.dto.js';
 import { TransfersService } from './transfers.service.js';
+import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto.js';
+import { TransactionHistoryService } from './transaction-history.service.js';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -27,6 +30,7 @@ export class WalletsController {
   constructor(
     private readonly walletsService: WalletsService,
     private readonly transfersService: TransfersService,
+    private readonly transactionHistoryService: TransactionHistoryService,
   ) {}
 
   @Get('me')
@@ -43,5 +47,13 @@ export class WalletsController {
     const key = validateIdempotencyKey(idempotencyKey);
 
     return this.transfersService.transfer(request.user.sub, dto, key);
+  }
+
+  @Get('transactions')
+  getTransactionHistory(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: TransactionHistoryQueryDto,
+  ) {
+    return this.transactionHistoryService.findByUserId(request.user.sub, query);
   }
 }
