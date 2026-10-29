@@ -13,6 +13,10 @@ export class UsersService {
     return db.orm.public.User.first({ email });
   }
 
+  async findById(id: string) {
+    return db.orm.public.User.first({ id });
+  }
+
   async createWithWallet(input: CreateUserInput) {
     return db.transaction(async (tx) => {
       const user = await tx.orm.public.User.create({

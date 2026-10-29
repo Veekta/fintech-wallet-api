@@ -1,536 +1,620 @@
-## 1. Database
+# Fintech Wallet & Ledger API — Database Design
 
-The application will use PostgreSQL as its primary relational database.
+## 1. Database Overview
 
-PostgreSQL is suitable for this system because financial operations require:
+The Fintech Wallet & Ledger API uses PostgreSQL as its primary relational database.
 
-- ACID transactions
-- Strong consistency
-- Relational data modeling
-- Foreign key constraints
-- Database-level constraints
-- Row-level locking
-- Reliable numeric types
-- Transaction isolation
+The database stores user accounts, wallets, authentication refresh-token records, financial transactions, and ledger entries.
 
-The application will interact with PostgreSQL through Prisma.
+The database design prioritizes:
 
----
+- Referential integrity.
+- Atomic financial operations.
+- Exact monetary representation.
+- Protection against duplicate transfer processing.
+- Concurrency safety.
+- Traceability of financial movements.
+- Clear relationships between users, wallets, transactions, and ledger entries.
 
-## 2. User
+The application uses a custom Prisma 8 RC integration with a contract-based schema and runtime query interface. Database operations must follow the supported APIs of this integration.
 
-The `User` entity represents a registered user of the platform.
+This document describes the current database model and its intended financial invariants. It does not claim that every invariant is enforced by a database constraint alone.
+
+## 2. Database Technology
+
+| Component                | Technology                                      |
+| ------------------------ | ----------------------------------------------- |
+| Database                 | PostgreSQL                                      |
+| Database integration     | Custom Prisma 8 RC contract/runtime integration |
+| Database contract        | `src/prisma/contract.prisma`                    |
+| Contract metadata        | `src/prisma/contract.json`                      |
+| Database runtime         | `src/prisma/db.ts`                              |
+| Connection configuration | `DATABASE_URL`                                  |
+| Local database           | PostgreSQL through Docker                       |
+
+The contract defines the database models, fields, relationships, and enum types used by the application.
+
+The runtime initializes the database connection using the configured connection URL and contract metadata.
+
+Database schema changes must follow the project's established contract and migration workflow.
+
+## 3. Entity Overview
+
+The current database contains the following principal models:
+
+| Model          | Purpose                                                     |
+| -------------- | ----------------------------------------------------------- |
+| `User`         | Stores user identity, credentials, role, and account status |
+| `Wallet`       | Stores wallet ownership, balance, currency, and status      |
+| `RefreshToken` | Supports refresh-token/session handling                     |
+| `Transaction`  | Represents a financial operation                            |
+| `LedgerEntry`  | Records the financial effect of a transaction on a wallet   |
+
+The database also defines enums for roles, statuses, transaction types, and ledger entry types.
+
+Deposits and withdrawals appear as transaction types in the schema, but dedicated deposit and withdrawal workflows are not implemented in the current project scope.
+
+## 4. User Model
+
+The `User` model represents a registered platform user.
 
 ### Fields
 
-| Field        | Type     | Description                 |
-| ------------ | -------- | --------------------------- |
-| id           | UUID     | Unique user identifier      |
-| email        | String   | User's unique email address |
-| passwordHash | String   | Securely hashed password    |
-| name         | String   | User's name                 |
-| role         | Enum     | User's system role          |
-| status       | Enum     | User account status         |
-| createdAt    | DateTime | Account creation timestamp  |
-| updatedAt    | DateTime | Last update timestamp       |
+| Field          | Type / representation | Description               |
+| -------------- | --------------------- | ------------------------- |
+| `id`           | Text identifier       | Unique user identifier    |
+| `email`        | String                | User's email address      |
+| `passwordHash` | String                | Argon2 password hash      |
+| `name`         | Nullable string       | User's display name       |
+| `role`         | `UserRole` enum       | User's authorization role |
+| `status`       | `UserStatus` enum     | Account status            |
+| `createdAt`    | Timestamp             | Account creation time     |
+| `updatedAt`    | Timestamp             | Last update time          |
 
-### Role
+The exact database types and constraints are defined by the Prisma contract.
 
-The initial roles are:
+### Roles
 
-```text
-USER
-ADMIN
-```
+The `UserRole` enum includes:
 
-### Status
+- `USER`
+- `ADMIN`
 
-The initial account statuses are:
+The role determines which role-protected operations a user may perform.
 
-```text
-ACTIVE
-SUSPENDED
-```
+Public registration does not allow a client to assign itself the `ADMIN` role. Administrator accounts are created through the separate seed process.
 
-### Constraints
+### Account statuses
 
-- `email` must be unique.
-- Passwords must never be stored in plaintext.
+The `UserStatus` enum includes:
+
+- `ACTIVE`
+- `SUSPENDED`
+- `DEACTIVATED`
+
+The authentication guard checks the current account status in the database. Suspended and deactivated users cannot continue accessing protected endpoints using an otherwise valid, unexpired access token.
+
+### Constraints and security considerations
+
 - User IDs must be unique.
-- Suspended users must not be allowed to perform restricted financial operations.
+- Email uniqueness should be enforced by the schema or database constraint.
+- Passwords are stored as hashes, never as plaintext.
+- Administrative access is controlled by role-based authorization.
+- Account-status changes must follow the safeguards implemented in the Admin service.
 
----
+## 5. Wallet Model
 
-## 3. Wallet
-
-The `Wallet` entity represents a user's account for holding digital funds.
-
-### Fields
-
-| Field     | Type     | Description               |
-| --------- | -------- | ------------------------- |
-| id        | UUID     | Unique wallet identifier  |
-| userId    | UUID     | Owner of the wallet       |
-| balance   | Decimal  | Current wallet balance    |
-| currency  | String   | Wallet currency           |
-| status    | Enum     | Wallet status             |
-| createdAt | DateTime | Wallet creation timestamp |
-| updatedAt | DateTime | Last update timestamp     |
-
-### Status
-
-The initial wallet statuses are:
-
-```text
-ACTIVE
-SUSPENDED
-```
-
-### Constraints
-
-- Every wallet must belong to a valid user.
-- `userId` must reference an existing user.
-- A user can initially have only one wallet.
-- Balance must not become negative through a valid financial operation.
-- Monetary values must use an exact decimal representation rather than floating-point numbers.
-
----
-
-## 4. Transaction
-
-The `Transaction` entity represents a financial operation performed by the system.
-
-A transaction is different from a ledger entry.
-
-The transaction describes the overall financial operation, while ledger entries describe the individual financial effects of that operation.
+The `Wallet` model represents a user's wallet.
 
 ### Fields
 
-| Field               | Type     | Description                   |
-| ------------------- | -------- | ----------------------------- |
-| id                  | UUID     | Unique transaction identifier |
-| type                | Enum     | Type of financial operation   |
-| status              | Enum     | Current transaction state     |
-| amount              | Decimal  | Transaction amount            |
-| currency            | String   | Transaction currency          |
-| sourceWalletId      | UUID     | Wallet funds originate from   |
-| destinationWalletId | UUID     | Wallet receiving funds        |
-| createdAt           | DateTime | Creation timestamp            |
-| updatedAt           | DateTime | Last update timestamp         |
+| Field       | Type / representation  | Description              |
+| ----------- | ---------------------- | ------------------------ |
+| `id`        | Text identifier        | Unique wallet identifier |
+| `userId`    | Text identifier        | Associated user          |
+| `balance`   | Numeric decimal        | Current wallet balance   |
+| `currency`  | String / currency code | Wallet currency          |
+| `status`    | `WalletStatus` enum    | Wallet status            |
+| `createdAt` | Timestamp              | Wallet creation time     |
+| `updatedAt` | Timestamp              | Last update time         |
 
-### Transaction Types
+### Wallet status
 
-The initial transaction types are:
+The `WalletStatus` enum includes:
 
-```text
-TRANSFER
-DEPOSIT
-WITHDRAWAL
-```
+- `ACTIVE`
+- `SUSPENDED`
 
-### Transaction Status
+### Relationships and constraints
 
-The initial transaction statuses are:
+- Each wallet belongs to a user.
+- `Wallet.userId` references the associated user.
+- The current schema enforces a unique user-to-wallet association through the unique `userId` field.
+- A user therefore has at most one associated wallet in the current model.
+- The balance uses a numeric decimal representation.
+- Valid financial operations must not cause the wallet balance to become negative.
 
-```text
-PENDING
-PROCESSING
-COMPLETED
-FAILED
-```
+### Wallet currency
 
-### Constraints
+The default wallet currency is `NGN`.
 
-- Transaction amount must be greater than zero.
-- Source and destination wallets must exist when required.
-- A completed transfer must have valid source and destination wallets.
-- A transaction must not be processed more than once.
-- Failed transactions must not leave financial state partially modified.
-- Every completed financial transaction must have corresponding ledger entries.
+Currency compatibility must be validated by the financial service before processing a transfer.
 
----
+### Balance integrity
 
-## 5. LedgerEntry
+Wallet balances must only change through controlled financial operations. The API must not expose unrestricted operations that allow clients to set arbitrary balances.
 
-The `LedgerEntry` entity records the financial effect of a transaction on a wallet.
+The application must combine service-level validation with database transaction and locking safeguards to protect balances during concurrent transfers.
 
-A simple wallet transfer produces two ledger entries:
+## 6. RefreshToken Model
 
-```text
-DEBIT  → Source Wallet
-CREDIT → Destination Wallet
-```
+The `RefreshToken` model supports refresh-token handling for authenticated users.
+
+It is associated with the `User` model and supports the authentication lifecycle.
+
+Refresh-token records are used by the authentication implementation to manage refresh sessions and token rotation.
+
+The exact fields, expiry behavior, and revocation semantics are defined by the current Prisma contract and authentication services. This document does not assume additional fields or session-management features that have not been verified.
+
+Refresh tokens and related credentials must not be exposed in ordinary user responses or application logs.
+
+## 7. Transaction Model
+
+The `Transaction` model represents a financial operation.
+
+A transaction describes the operation itself. A ledger entry records one of the financial effects associated with that operation.
 
 ### Fields
 
-| Field         | Type     | Description                         |
-| ------------- | -------- | ----------------------------------- |
-| id            | UUID     | Unique ledger entry identifier      |
-| transactionId | UUID     | Transaction that produced the entry |
-| walletId      | UUID     | Wallet affected by the entry        |
-| type          | Enum     | CREDIT or DEBIT                     |
-| amount        | Decimal  | Amount recorded                     |
-| createdAt     | DateTime | Creation timestamp                  |
+| Field                 | Type / representation    | Description                                 |
+| --------------------- | ------------------------ | ------------------------------------------- |
+| `id`                  | Text identifier          | Unique transaction identifier               |
+| `initiatedByUserId`   | Text identifier          | User who initiated the operation            |
+| `type`                | `TransactionType` enum   | Financial operation type                    |
+| `status`              | `TransactionStatus` enum | Transaction state                           |
+| `amount`              | Numeric decimal          | Transaction amount                          |
+| `currency`            | String / currency code   | Transaction currency                        |
+| `sourceWalletId`      | Nullable text identifier | Source wallet, where applicable             |
+| `destinationWalletId` | Nullable text identifier | Destination wallet, where applicable        |
+| `idempotencyKey`      | String                   | Key used for duplicate-operation protection |
+| `createdAt`           | Timestamp                | Transaction creation time                   |
+| `updatedAt`           | Timestamp                | Last update time                            |
 
-### Ledger Entry Types
+The precise database types and nullability are defined in the Prisma contract.
 
-```text
-DEBIT
-CREDIT
+### Transaction types
+
+The `TransactionType` enum includes:
+
+- `TRANSFER`
+- `DEPOSIT`
+- `WITHDRAWAL`
+
+The current application implements wallet-to-wallet transfers. The presence of `DEPOSIT` and `WITHDRAWAL` in the enum does not imply that external payment integrations or deposit and withdrawal endpoints are available.
+
+### Transaction statuses
+
+The `TransactionStatus` enum includes:
+
+- `PENDING`
+- `PROCESSING`
+- `COMPLETED`
+- `FAILED`
+- `REVERSED`
+
+These values describe possible transaction states in the schema. The lifecycle transitions permitted by each service depend on the implemented business logic.
+
+### Source and destination wallets
+
+The transaction can reference the wallet from which funds originate and the wallet receiving the funds.
+
+These fields may be nullable to accommodate transaction types that do not use both wallet references.
+
+For a completed wallet-to-wallet transfer, the source and destination must be valid and different wallets.
+
+### Idempotency
+
+The transaction model includes an idempotency key used by the transfer workflow to protect against duplicate processing.
+
+The key must be handled consistently with the transfer service's idempotency logic and the database constraints defined by the contract.
+
+The application must not assume that a field alone guarantees idempotency; correctness also depends on request validation, transaction handling, and concurrency safeguards.
+
+## 8. LedgerEntry Model
+
+The `LedgerEntry` model records the financial effect of a transaction on an individual wallet.
+
+### Fields
+
+| Field           | Type / representation  | Description                    |
+| --------------- | ---------------------- | ------------------------------ |
+| `id`            | Text identifier        | Unique ledger-entry identifier |
+| `transactionId` | Text identifier        | Associated transaction         |
+| `walletId`      | Text identifier        | Affected wallet                |
+| `entryType`     | `LedgerEntryType` enum | Debit or credit                |
+| `amount`        | Numeric decimal        | Amount recorded                |
+| `createdAt`     | Timestamp              | Ledger-entry creation time     |
+
+### Ledger entry types
+
+The `LedgerEntryType` enum includes:
+
+- `DEBIT`
+- `CREDIT`
+
+### Example: ₦20,000 transfer
+
+Suppose Wallet A transfers ₦20,000 to Wallet B.
+
+The transaction is associated with two ledger entries:
+
+| Entry   | Wallet   | Type     |  Amount |
+| ------- | -------- | -------- | ------: |
+| Entry 1 | Wallet A | `DEBIT`  | ₦20,000 |
+| Entry 2 | Wallet B | `CREDIT` | ₦20,000 |
+
+The entries represent the two financial effects of the transfer.
+
+For a successful transfer, the total debit amount and total credit amount should match.
+
+The transaction record and both ledger entries must be created consistently with the wallet balance changes.
+
+### Ledger integrity
+
+Ledger entries provide a historical record of financial movements. They should not be treated as arbitrary records that can be edited independently of their transactions.
+
+The current project establishes the ledger data model and creates entries as part of transfer processing. A separate reconciliation engine, immutable audit service, and independent ledger-balancing process are not part of the current implementation.
+
+## 9. Entity Relationships
+
+### User and Wallet
+
+A user has an associated wallet through the unique `Wallet.userId` relationship.
+
+```text id="v3q4c2"
+User 1 ───────── 0..1 Wallet
 ```
 
-### Example
+The user-to-wallet association is unique. Wallet creation during registration is performed within the registration database transaction.
 
-For:
+### User and RefreshToken
 
-```text
-Wallet A → Wallet B
-₦20,000
+A user can have associated refresh-token records.
+
+```text id="uy2v82"
+User 1 ───────── N RefreshToken
 ```
 
-the system creates:
+The actual lifecycle and retention of refresh-token records are governed by the authentication implementation.
 
-```text
-Ledger Entry 1
-----------------
-wallet: A
-type: DEBIT
-amount: ₦20,000
+### User and Transaction
+
+The transaction model records the user who initiated the financial operation.
+
+```text id="62rqxj"
+User 1 ───────── N Transactions
 ```
 
-and:
+The initiating user reference supports attribution and administrative transaction views.
 
-```text
-Ledger Entry 2
-----------------
-wallet: B
-type: CREDIT
-amount: ₦20,000
+### Wallet and Transaction
+
+A transaction may reference a source wallet and a destination wallet.
+
+```text id="8ay0n3"
+Wallet 1 ──────── N Transactions (source)
+Wallet 1 ──────── N Transactions (destination)
 ```
 
-Therefore:
+These are separate relationships because a wallet can send funds in one transaction and receive funds in another.
 
-```text
-Total Debits = Total Credits
-```
+### Transaction and LedgerEntry
 
-The ledger provides an auditable record of financial movements.
+A transaction can have multiple ledger entries.
 
----
-
-## 6. Relationships
-
-### User → Wallet
-
-A user initially has one wallet.
-
-```text
-User 1 ───────── 1 Wallet
-```
-
-The wallet contains a foreign key referencing the user.
-
----
-
-### Wallet → Transaction
-
-A wallet can participate in many transactions.
-
-A transaction may reference a wallet as either:
-
-- Source wallet
-- Destination wallet
-
-```text
-Wallet 1 ──────── N Transactions
-```
-
-A transaction therefore has two wallet relationships:
-
-```text
-sourceWallet
-destinationWallet
-```
-
----
-
-### Transaction → LedgerEntry
-
-A transaction can produce multiple ledger entries.
-
-For a basic transfer:
-
-```text
+```text id="7ey3ko"
 Transaction 1 ──────── N LedgerEntries
 ```
 
-A completed transfer should have at least:
+For a basic completed transfer, the expected financial effects are one debit and one credit.
 
-```text
-1 DEBIT
-1 CREDIT
-```
+### Wallet and LedgerEntry
 
----
+A wallet can be associated with many ledger entries over time.
 
-### Wallet → LedgerEntry
-
-A wallet can have many ledger entries.
-
-```text
-Wallet 1 ──────── N LedgerEntries
+```text id="4s9z6o"
+Wallet 1 ───────── N LedgerEntries
 ```
 
 These entries provide the historical financial activity associated with the wallet.
 
----
+## 10. Entity Relationship Overview
 
-## 7. Entity Relationship Overview
-
-```text
-┌──────────────┐
-│     User     │
-├──────────────┤
-│ id           │
-│ email        │
-│ passwordHash │
-│ name         │
-│ role         │
-│ status       │
-└──────┬───────┘
-       │
-       │ 1:1
-       ▼
-┌──────────────┐
-│    Wallet    │
-├──────────────┤
-│ id           │
-│ userId       │
-│ balance      │
-│ currency     │
-│ status       │
-└──────┬───────┘
-       │
-       │
-       ├──────────────────────┐
-       │                      │
-       ▼                      ▼
-┌────────────────┐     ┌────────────────┐
-│  Transaction   │     │  LedgerEntry   │
-├────────────────┤     ├────────────────┤
-│ id             │     │ id             │
-│ type           │     │ transactionId  │
-│ status         │     │ walletId       │
-│ amount         │     │ type           │
-│ currency       │     │ amount         │
-│ sourceWalletId │     │ createdAt      │
-│ destination... │     └────────────────┘
-└────────────────┘
-        │
-        │ 1:N
-        ▼
-   Ledger Entries
+```text id="2c4c0j"
++-------------------+
+| User              |
++-------------------+
+| id                |
+| email             |
+| passwordHash      |
+| name              |
+| role              |
+| status            |
+| createdAt         |
+| updatedAt         |
++-------------------+
+    |           |
+    |           +--------------------+
+    |                                |
+    | 1 : 0..1                      | 1 : N
+    v                                v
++-------------------+        +-------------------+
+| Wallet            |        | RefreshToken      |
++-------------------+        +-------------------+
+| id                |
+| userId            |
+| balance           |
+| currency          |
+| status            |
+| createdAt         |
+| updatedAt         |
++-------------------+
+    |
+    | participates in source/destination
+    v
++-------------------+
+| Transaction       |
++-------------------+
+| id                |
+| initiatedByUserId |
+| type              |
+| status            |
+| amount            |
+| currency          |
+| sourceWalletId    |
+| destinationWalletId|
+| idempotencyKey    |
+| createdAt         |
+| updatedAt         |
++-------------------+
+    |
+    | 1 : N
+    v
++-------------------+
+| LedgerEntry       |
++-------------------+
+| id                |
+| transactionId     |
+| walletId          |
+| entryType         |
+| amount            |
+| createdAt         |
++-------------------+
 ```
 
----
+This diagram illustrates the logical relationships. The actual foreign-key constraints and cardinalities are determined by the Prisma contract.
 
-## 8. Financial Invariants
+## 11. Financial Invariants
 
-Financial invariants are rules that must remain true regardless of application state or transaction volume.
+Financial invariants are conditions that must remain true when financial operations succeed.
 
-### Balance Integrity
+### 11.1 Balance integrity
 
-A wallet must not be allowed to spend more money than it has available.
+A valid transfer must not spend more than the source wallet's available balance.
 
-```text
+```text id="5jtyy3"
 Available Balance >= Transfer Amount
 ```
 
----
+The balance check must remain safe when multiple requests execute concurrently.
 
-### Double-Entry Integrity
+### 11.2 Debit and credit integrity
 
-A completed transfer must contain matching financial effects.
+For a completed wallet-to-wallet transfer:
 
-```text
+```text id="t5rhhr"
 Total Debits = Total Credits
 ```
 
-For example:
+For a transfer of ₦20,000:
 
-```text
-DEBIT  ₦20,000
-CREDIT ₦20,000
+```text id="8ah5wm"
+DEBIT   ₦20,000
+CREDIT  ₦20,000
 ```
 
----
+This represents the matching financial effects of the operation.
 
-### Atomicity
+### 11.3 Atomicity
 
-A financial operation must either complete entirely or have no financial effect.
+The following changes must succeed or fail together for a transfer:
 
-For a transfer:
+- Transaction record creation.
+- Source wallet debit.
+- Destination wallet credit.
+- Debit ledger-entry creation.
+- Credit ledger-entry creation.
 
-```text
-Debit Source
-Credit Destination
-Create Transaction
-Create Ledger Entries
+If one of the required operations fails, the database transaction must roll back the other changes.
+
+### 11.4 Duplicate-processing protection
+
+The transfer workflow uses idempotency to prevent repeated requests from unintentionally creating duplicate transfers.
+
+The database contract, service logic, and transaction handling must work together to preserve this guarantee under concurrent requests and retries.
+
+### 11.5 Referential integrity
+
+Records must reference valid related entities.
+
+Examples include:
+
+- `Wallet.userId` referencing a valid user.
+- `Transaction.initiatedByUserId` referencing the initiating user.
+- `LedgerEntry.transactionId` referencing a valid transaction.
+- `LedgerEntry.walletId` referencing a valid wallet.
+- Source and destination wallet references identifying valid wallets when required.
+
+The actual foreign-key constraints should be verified against the generated schema and migration definitions.
+
+### 11.6 Auditability
+
+A completed transfer should be traceable through its transaction record and associated ledger entries.
+
+The data model supports investigation of the operation, its amount, its wallet references, and the recorded financial effects.
+
+A complete independent reconciliation or audit platform remains future work.
+
+## 12. Monetary Data
+
+Financial values use PostgreSQL numeric decimal types.
+
+The wallet balance is defined using a numeric type with precision and scale, rather than a binary floating-point type. The transaction and ledger amount fields also use numeric decimal representations.
+
+The current wallet balance uses a precision of `19` and a scale of `2`.
+
+```text id="k3wj6m"
+Numeric(19,2)
 ```
 
-These operations must be treated as one atomic database operation.
+This supports exact decimal representation for monetary values within the permitted range.
 
-If one operation fails, the other financial modifications must be rolled back.
+### Monetary rules
 
----
+- Do not use floating-point arithmetic for financial calculations.
+- Validate that amounts are positive where required.
+- Respect the precision and scale defined in the database contract.
+- Preserve the intended currency throughout a transfer.
+- Ensure wallet balance changes and ledger amounts agree.
 
-### No Duplicate Processing
+The API and service layers must validate financial values before writing them to the database.
 
-A financial transaction must not be processed multiple times.
+## 13. Indexing and Query Performance
 
-The system must eventually support idempotency mechanisms to protect against duplicate requests.
+Indexes should support common lookups and relationships without adding unnecessary write overhead.
 
----
+Important query patterns include:
 
-### Auditability
+- User lookup by email.
+- Wallet lookup by user ID.
+- Transaction listing by wallet and date.
+- Administrative transaction filtering by type, status, and date.
+- Ledger lookup by transaction ID.
+- Ledger lookup by wallet ID.
+- Idempotency-key lookup during transfer processing.
 
-Every completed financial operation must be traceable through its transaction and ledger entries.
+Potential index candidates include:
 
-The system should be able to answer:
-
-> Where did this money come from?
-
-and:
-
-> Where did this money go?
-
----
-
-### Referential Integrity
-
-Records must not reference non-existent entities.
-
-For example:
-
-```text
+```text id="c29j9c"
+User.email
 Wallet.userId
-        ↓
-User.id
-```
-
-and:
-
-```text
+Transaction.initiatedByUserId
+Transaction.sourceWalletId
+Transaction.destinationWalletId
+Transaction.idempotencyKey
 LedgerEntry.transactionId
-        ↓
-Transaction.id
+LedgerEntry.walletId
 ```
 
-must always reference valid records.
+These are query-driven index candidates, not a claim that every listed index is already defined in the database contract.
 
----
+Unique fields and relationship fields should use the appropriate uniqueness constraints or indexes where required by the schema.
 
-## 9. Monetary Data
+Indexes should be reviewed as query patterns and data volumes become clearer. Additional indexes increase storage use and can add overhead to insert and update operations.
 
-Financial amounts will use PostgreSQL's exact numeric/decimal type.
+## 14. Database Transactions and Concurrency
 
-Floating-point types such as:
+Financial operations that update multiple related records must use database transactions.
 
-```text
-FLOAT
-DOUBLE
-```
+A transfer may modify:
 
-will not be used for monetary balances.
-
-The system will represent monetary values using an exact decimal representation.
-
----
-
-## 10. Indexing Strategy
-
-Indexes will be added to fields that are frequently used for lookups and relationships.
-
-Initial candidates include:
-
-```text
-users.email
-wallets.userId
-transactions.sourceWalletId
-transactions.destinationWalletId
-transactions.status
-ledger_entries.transactionId
-ledger_entries.walletId
-```
-
-Indexes will be reviewed and optimized as query patterns become known.
-
-We will avoid adding unnecessary indexes because indexes also increase storage requirements and write overhead.
-
----
-
-## 11. Data Consistency and Transactions
-
-Operations that modify multiple financial records must use database transactions.
-
-For example, a transfer may modify:
-
-```text
+```text id="l82gwm"
 Transaction
-Wallet A
-Wallet B
-Ledger Entry A
-Ledger Entry B
+Source Wallet
+Destination Wallet
+Source Ledger Entry
+Destination Ledger Entry
 ```
 
-These changes must be committed together.
+The operation must commit all required changes together.
 
-Conceptually:
-
-```text
+```text id="6f7b1s"
 BEGIN
 
 Create transaction
-
-Debit Wallet A
-
-Credit Wallet B
-
+Debit source wallet
+Credit destination wallet
 Create debit ledger entry
-
 Create credit ledger entry
 
 COMMIT
 ```
 
-If any operation fails:
+If a required operation fails:
 
-```text
+```text id="x3m6va"
 ROLLBACK
 ```
 
-The database should return to the state that existed before the financial operation began.
+### Concurrency protection
 
----
+Concurrent transfers can create race conditions if two requests both read the same available balance before either debit is applied.
 
-## 12. Future Database Considerations
+The transfer implementation uses database-level locking and transaction safeguards to protect critical wallet operations.
 
-The initial database model is intentionally simple.
+For example, a wallet holding ₦100,000 must not successfully fund two concurrent transfers of ₦80,000 each.
 
-As the platform evolves, additional entities may be introduced, including:
+Concurrency protection must be verified against PostgreSQL behavior. Service-level tests are valuable, but integration tests against the actual database are also needed to confirm locking and transaction behavior.
 
-```text
-RefreshToken
-IdempotencyKey
-Deposit
-Withdrawal
-Payment
-Webhook
-AuditLog
-Currency
-ExchangeRate
-```
+## 15. Schema Changes and Migrations
 
-These will only be introduced when they are required by actual product or architectural requirements.
+The Prisma contract is the schema definition used by the project's custom database integration.
 
-The initial goal is to build a correct and understandable financial core before introducing additional complexity.
+Changes to models, fields, enum values, relationships, or constraints should follow the established database workflow.
+
+A schema change should include:
+
+1. Updating the contract.
+2. Reviewing the generated or proposed migration.
+3. Applying the migration to the appropriate development database.
+4. Verifying that the database matches the intended schema.
+5. Updating affected services and tests.
+6. Running the complete test suite and application build.
+
+Schema changes must be handled carefully because they may affect financial data, database relationships, or existing API behavior.
+
+The project uses contract verification and signing as part of its Prisma workflow. Database verification errors should be resolved before relying on the database contract as verified.
+
+## 16. Future Database Considerations
+
+The following models or capabilities may be introduced when the product requires them:
+
+- Dedicated deposit and withdrawal records or workflows.
+- Payment-provider references and webhook records.
+- Beneficiary records.
+- KYC and identity-verification records.
+- Transaction reconciliation records.
+- Persistent administrative audit logs.
+- Additional currency and exchange-rate models.
+- Dedicated reporting or statement-generation data.
+
+These are future considerations rather than claims about the current schema.
+
+The initial objective is to maintain a small, understandable financial core with clear relationships, atomic transfers, and consistent transaction and ledger records.
+
+## 17. Database Design Principles
+
+The database design follows these principles:
+
+1. Use relational constraints to protect data integrity.
+2. Store monetary values using exact numeric representations.
+3. Keep user, wallet, transaction, and ledger responsibilities distinct.
+4. Use foreign keys for entity relationships where defined by the schema.
+5. Use database transactions for operations that modify related financial records.
+6. Protect concurrent wallet operations with appropriate locking.
+7. Use idempotency to reduce duplicate transfer processing.
+8. Keep schema changes explicit and reviewable.
+9. Add indexes based on actual query patterns.
+10. Distinguish current schema capabilities from future financial workflows.
+11. Verify database behavior against PostgreSQL rather than relying only on mocked tests.
+12. Preserve the consistency of wallet balances, transaction records, and ledger entries.
