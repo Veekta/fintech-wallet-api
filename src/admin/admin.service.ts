@@ -231,7 +231,10 @@ export class AdminService {
       // Serialize admin status changes so concurrent requests cannot
       // both pass the last-active-administrator check.
       const lockPlan = db.raw.sql`
-  SELECT pg_advisory_xact_lock(728194) AS "locked"
+  SELECT true AS "locked"
+  FROM (
+    SELECT pg_advisory_xact_lock(728194)
+  ) AS lock_result
 `
         .returnsRow({
           locked: 'pg/bool@1',

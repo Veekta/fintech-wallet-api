@@ -1,42 +1,21 @@
+# Fintech Wallet & Ledger API — API Design
+
 ## 1. API Overview
 
-The Fintech Wallet & Ledger API will expose a RESTful HTTP API for managing users, wallets, financial transactions, transfers, deposits, withdrawals, and administrative operations.
+The Fintech Wallet & Ledger API is a RESTful HTTP API built with NestJS, TypeScript, and PostgreSQL. It provides authentication, wallet access, wallet-to-wallet transfers, transaction history, and administrative user and transaction management.
 
-The API will use JSON for request and response bodies.
+The API currently focuses on secure wallet operations and financial record consistency. External payment integrations, deposits, and withdrawals are outside the implemented scope.
 
-All API endpoints will be versioned under:
+### API conventions
 
-```text
-/api/v1
-```
+- **Protocol:** HTTP; production deployment should use HTTPS.
+- **Data format:** JSON for request and response bodies.
+- **Version prefix:** `/api/v1`
+- **Authentication:** JWT bearer access tokens for protected endpoints.
+- **Authorization:** Role-based access control for administrative endpoints.
+- **Financial integrity:** Database transactions, ledger entries, and idempotency for transfers.
 
-Example:
-
-```text
-POST /api/v1/auth/login
-```
-
----
-
-## 2. API Design Principles
-
-The API will follow these principles:
-
-- Use RESTful resource naming where appropriate.
-- Use HTTP methods according to their intended semantics.
-- Use JSON for request and response bodies.
-- Version the API.
-- Validate all incoming data.
-- Protect sensitive operations with authentication and authorization.
-- Use consistent response and error formats.
-- Never allow clients to directly manipulate financial balances.
-- Represent financial operations as business operations rather than direct database updates.
-- Use idempotency for operations that can create financial side effects.
-- Return appropriate HTTP status codes.
-
----
-
-## 3. Base URL
+## 2. Base URL
 
 Development:
 
@@ -44,191 +23,153 @@ Development:
 http://localhost:3000/api/v1
 ```
 
-Production:
+Production URL will depend on the deployment environment.
 
-```text
-https://api.example.com/api/v1
-```
+All endpoint paths in this document are relative to the base URL unless the complete path is shown.
 
-The production URL will be configured when the application is deployed.
+## 3. API Design Principles
 
----
+The API follows these principles:
 
-# 4. Authentication
+1. Use clear, resource-oriented endpoint names.
+2. Use HTTP methods according to their intended semantics.
+3. Validate incoming data on the server.
+4. Authenticate protected requests.
+5. Enforce authorization independently of the frontend.
+6. Never allow clients to directly set wallet balances.
+7. Process financial operations atomically.
+8. Use idempotency to protect transfers against duplicate processing.
+9. Keep transaction records and ledger entries consistent.
+10. Return appropriate HTTP status codes.
+11. Document implemented behavior separately from planned functionality.
 
-Authentication endpoints are responsible for registering users and establishing authenticated sessions.
+## 4. Authentication API
 
-## 4.1 Register
+Authentication endpoints are responsible for account registration, login, token refresh, and logout.
+
+### 4.1 Register
+
+**Endpoint**
 
 ```http
 POST /api/v1/auth/register
 ```
 
-### Request
+Creates a user account and its associated default NGN wallet.
+
+**Request body**
 
 ```json
 {
   "name": "John Doe",
   "email": "john@example.com",
-  "password": "secure-password"
+  "password": "your-password"
 }
 ```
 
-### Response
+The accepted fields are determined by the registration DTO. Public registration does not allow the client to assign the `ADMIN` role.
 
-```json
-{
-  "user": {
-    "id": "uuid",
-    "name": "John Doe",
-    "email": "john@example.com",
-    "role": "USER",
-    "status": "ACTIVE"
-  },
-  "accessToken": "access-token"
-}
-```
+**Expected behavior**
 
-### Status Codes
+- Validate the registration input.
+- Hash the password using Argon2.
+- Create the user and wallet within the registration transaction.
+- Roll back the operation if the transaction fails.
 
-```text
-201 Created
-400 Bad Request
-409 Conflict
-```
+**Response**
 
-**Wallet Creation Behavior**
+The response contains the created user's permitted public fields and the access token. The password hash and other sensitive internal fields must not be returned.
 
-Upon successful registration, the system automatically creates a default NGN wallet for the new user within the same database transaction as user creation.
+**Relevant status codes**
 
-Both operations must succeed together. If either operation fails, the entire transaction must roll back.
+- `201 Created` — Registration succeeded.
+- `400 Bad Request` — Invalid input.
+- `409 Conflict` — A conflicting account already exists, where handled by the implementation.
 
-Wallet creation is handled internally by the registration process and is not exposed as a separate endpoint in the MVP.
+### 4.2 Login
 
----
-
-## 4.2 Login
+**Endpoint**
 
 ```http
 POST /api/v1/auth/login
 ```
 
-### Request
+Authenticates a user using their registered email and password.
+
+**Request body**
 
 ```json
 {
   "email": "john@example.com",
-  "password": "secure-password"
+  "password": "your-password"
 }
 ```
 
-### Response
+**Expected behavior**
 
-```json
-{
-  "accessToken": "access-token"
-}
-```
+1. Locate the account.
+2. Verify the submitted password against the Argon2 hash.
+3. Confirm that the account is active.
+4. Issue authentication credentials when the checks succeed.
 
-### Status Codes
+The access token has a configured lifetime of 15 minutes. The authentication implementation also supports refresh-token handling.
 
-```text
-200 OK
-400 Bad Request
-401 Unauthorized
-```
+**Relevant status codes**
 
-**Refresh Token Cookie**
+- `200 OK` — Login succeeded.
+- `400 Bad Request` — Invalid request input.
+- `401 Unauthorized` — Invalid credentials or unavailable account, as applicable.
 
-The server sets the refresh token in an HTTP-only cookie named `refresh_token`. The cookie is configured with `SameSite=Strict`, uses the `/api/v1/auth` path, and is marked `Secure` in production.
+### 4.3 Refresh Token
 
----
-
-## 4.3 Refresh Token
+**Endpoint**
 
 ```http
 POST /api/v1/auth/refresh
 ```
 
-Used to obtain a new access token using a valid refresh token.
+Uses a valid refresh token to obtain a new access token.
 
-### Status Codes
+The implementation supports refresh-token rotation and checks the associated user's account status.
 
-```text
-200 OK
-401 Unauthorized
-```
+The refresh-token transport and cookie attributes should follow the actual authentication controller configuration. Clients should not assume a cookie name or cookie policy beyond what the deployed implementation specifies.
 
----
+**Relevant status code**
 
-## 4.4 Logout
+- `200 OK` — Refresh succeeded.
+- `401 Unauthorized` — Missing, invalid, expired, or otherwise unusable refresh credentials.
+
+### 4.4 Logout
+
+**Endpoint**
 
 ```http
 POST /api/v1/auth/logout
 ```
 
-Revokes the user's refresh token using the `refresh_token` HTTP-only cookie and clears the cookie from the client's browser. This prevents the revoked refresh token from being used to obtain a new access token.
+Revokes the refresh-token session using the refresh-token mechanism supported by the authentication implementation.
 
-The endpoint does not require a valid access token. It uses the refresh-token cookie to identify the session to revoke.
+Logout is designed to invalidate the refresh session so it cannot be used to obtain further access tokens.
 
-## Status Codes
+The exact response and behavior when the refresh token is missing or invalid should be confirmed against the current controller.
 
-- `200 OK` — Logout successful, including when the refresh-token cookie is missing or already invalid.
+## 5. Wallet API
 
----
+### 5.1 Get Current Wallet
 
-# 5. User API
-
-## 5.1 Get Current User
-
-```http
-GET /api/v1/users/me
-```
-
-Returns information about the currently authenticated user.
-
-### Authentication
-
-Required.
-
-### Response
-
-```json
-{
-  "id": "uuid",
-  "name": "John Doe",
-  "email": "john@example.com",
-  "role": "USER",
-  "status": "ACTIVE"
-}
-```
-
-### Status Codes
-
-```text
-200 OK
-401 Unauthorized
-```
-
-The `/me` endpoint prevents clients from arbitrarily requesting another user's private account information.
-
----
-
-# 6. Wallet API
-
-## 6.1 Get Current Wallet
+**Endpoint**
 
 ```http
 GET /api/v1/wallets/me
 ```
 
-Returns the authenticated user's wallet.
+**Authentication:** Required.
 
-### Authentication
+Returns the wallet associated with the authenticated user.
 
-Required.
+The user identity is derived from the authenticated request rather than supplied as an arbitrary user ID by the client.
 
-### Response
+**Illustrative response**
 
 ```json
 {
@@ -239,46 +180,56 @@ Required.
 }
 ```
 
-### Status Codes
+The values above illustrate the response fields; the balance and identifiers will reflect the actual account.
 
-```text
-200 OK
-401 Unauthorized
-404 Not Found
-```
+**Relevant status codes**
 
----
+- `200 OK` — Wallet retrieved.
+- `401 Unauthorized` — Authentication is missing or invalid.
+- `404 Not Found` — No associated wallet was found.
 
-# 7. Transfer API
+### Wallet rules
 
-Transfers represent the movement of funds from one wallet to another.
+- A user's wallet must be associated with the correct user account.
+- Clients cannot directly set the wallet balance.
+- Financial balance changes must occur through controlled business operations.
+- Wallet access must be enforced by the backend.
 
-## 7.1 Create Transfer
+## 6. Transfer API
+
+### 6.1 Create Transfer
+
+**Endpoint**
 
 ```http
-POST /api/v1/transfers
+POST /api/v1/wallets/transfers
 ```
 
-### Authentication
+**Authentication:** Required.
 
-Required.
+Transfers move funds from the authenticated user's wallet to a recipient wallet.
 
-### Request
+**Headers**
 
 ```http
 Authorization: Bearer <access-token>
 Idempotency-Key: unique-request-key
+Content-Type: application/json
 ```
+
+**Request body**
 
 ```json
 {
-  "recipientWalletId": "wallet-b-uuid",
+  "recipientWalletId": "recipient-wallet-uuid",
   "amount": "20000.00",
   "currency": "NGN"
 }
 ```
 
-### Response
+The request must follow the implemented transfer DTO and validation rules.
+
+**Illustrative response**
 
 ```json
 {
@@ -287,87 +238,115 @@ Idempotency-Key: unique-request-key
   "status": "COMPLETED",
   "amount": "20000.00",
   "currency": "NGN",
-  "sourceWalletId": "wallet-a-uuid",
-  "destinationWalletId": "wallet-b-uuid",
-  "createdAt": "2026-10-06T10:00:00Z"
+  "sourceWalletId": "source-wallet-uuid",
+  "destinationWalletId": "recipient-wallet-uuid",
+  "createdAt": "2026-10-29T10:00:00Z"
 }
 ```
 
-### Status Codes
+The response illustrates the transfer record's core fields. The actual response is determined by the transfer service.
 
-```text
-201 Created
-400 Bad Request
-401 Unauthorized
-403 Forbidden
-404 Not Found
-409 Conflict
-422 Unprocessable Entity
-```
+### 6.2 Transfer processing
 
-Possible business errors include:
+A transfer must follow the implemented business rules and database safeguards.
 
-```text
-INSUFFICIENT_FUNDS
-INVALID_RECIPIENT
-SAME_SOURCE_AND_DESTINATION
-WALLET_SUSPENDED
-DUPLICATE_TRANSACTION
-CURRENCY_MISMATCH
-```
+The high-level flow is:
 
----
+1. Authenticate the requester.
+2. Validate the transfer input.
+3. Identify the source wallet associated with the authenticated user.
+4. Validate the recipient and transfer conditions.
+5. Check available funds.
+6. Apply the required wallet and transaction changes atomically.
+7. Record the debit and credit ledger entries.
+8. Commit the operation if all required steps succeed.
 
-## 7.2 Transfer Rules
+### 6.3 Transfer rules
 
-A transfer must satisfy the following rules:
+The transfer implementation protects against important financial inconsistencies:
 
-1. The user must be authenticated.
-2. The source wallet must belong to the authenticated user.
-3. The destination wallet must exist.
-4. The source and destination wallets must be different.
-5. Both wallets must be active.
-6. The amount must be greater than zero.
-7. The source wallet must have sufficient available funds.
-8. The source and destination currencies must match.
-9. The transfer must be processed atomically.
-10. A transfer must not be processed more than once.
-11. A successful transfer must produce the appropriate ledger entries.
+- Unauthorized use of another user's source wallet.
+- Invalid transfer amounts.
+- Insufficient available funds.
+- Duplicate transfer processing through idempotency.
+- Partial financial updates through database transaction handling.
+- Inconsistent transaction and ledger records.
+- Concurrent transfers spending the same available funds.
 
-The client must never directly specify the resulting wallet balance.
+The source and destination must satisfy the business rules enforced by the service. Clients must never supply the resulting wallet balance.
 
----
+### 6.4 Idempotency
 
-# 8. Transaction API
+Transfers accept an `Idempotency-Key` header.
 
-Transactions represent the lifecycle and history of financial operations.
+The key identifies a transfer request so that retries do not unintentionally create duplicate transfers.
 
-## 8.1 Get Transactions
+Clients should reuse the same key when retrying the same logical operation and use a new key for a genuinely new transfer.
 
-```http
-GET /api/v1/transactions
-```
+Idempotency is not a replacement for authorization, amount validation, or transaction safety.
 
-### Authentication
+### 6.5 Relevant status codes
 
-Required.
+The exact mapping depends on the exceptions returned by the implementation. Relevant HTTP outcomes include:
 
-### Query Parameters
+- `201 Created` — Transfer created successfully.
+- `400 Bad Request` — Invalid request input.
+- `401 Unauthorized` — Missing or invalid authentication.
+- `403 Forbidden` — Authenticated user lacks permission, where applicable.
+- `404 Not Found` — A required resource could not be found.
+- `409 Conflict` — A duplicate or conflicting operation, where handled.
+- `422 Unprocessable Entity` — A business-rule violation, where mapped to this status.
 
-```text
-?page=1
-&limit=20
-&type=TRANSFER
-&status=COMPLETED
-```
+These are potential outcomes, not a guarantee that every listed status is currently returned for every corresponding error.
 
-Example:
+## 7. Transaction History API
+
+### 7.1 Get Current User's Transactions
+
+**Endpoint**
 
 ```http
-GET /api/v1/transactions?page=1&limit=20&type=TRANSFER
+GET /api/v1/wallets/transactions
 ```
 
-### Response
+**Authentication:** Required.
+
+Returns transaction history associated with the authenticated user's wallet.
+
+The endpoint is wallet-scoped. A user must not be able to access another user's transaction history by changing query parameters.
+
+### 7.2 Query parameters
+
+The implemented transaction-history endpoint supports the following filters:
+
+| Parameter   | Purpose                                    |
+| ----------- | ------------------------------------------ |
+| `page`      | Requested page number                      |
+| `limit`     | Number of records requested per page       |
+| `type`      | Filter by transaction type                 |
+| `status`    | Filter by transaction status               |
+| `startDate` | Filter transactions from a starting date   |
+| `endDate`   | Filter transactions through an ending date |
+
+Supported transaction types include `TRANSFER`, `DEPOSIT`, and `WITHDRAWAL`, according to the database enum. This does not mean deposit and withdrawal endpoints are implemented.
+
+Supported transaction statuses include `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, and `REVERSED`.
+
+**Example**
+
+```http
+GET /api/v1/wallets/transactions?page=1&limit=20&type=TRANSFER&status=COMPLETED
+```
+
+Date-filter example:
+
+```http
+GET /api/v1/wallets/transactions?startDate=2026-10-01&endDate=2026-10-29
+```
+
+The implementation validates the date range and applies the supported filters. Results are ordered newest first and returned with pagination metadata.
+
+### 7.3 Illustrative response
 
 ```json
 {
@@ -378,7 +357,7 @@ GET /api/v1/transactions?page=1&limit=20&type=TRANSFER
       "status": "COMPLETED",
       "amount": "20000.00",
       "currency": "NGN",
-      "createdAt": "2026-10-06T10:00:00Z"
+      "createdAt": "2026-10-29T10:00:00Z"
     }
   ],
   "pagination": {
@@ -390,163 +369,89 @@ GET /api/v1/transactions?page=1&limit=20&type=TRANSFER
 }
 ```
 
-Users must only be able to retrieve transactions they are authorized to access.
+The example illustrates the general response structure. The precise fields returned for each transaction must match the service's selected fields.
 
----
+### 7.4 Relevant status codes
 
-## 8.2 Get Transaction
+- `200 OK` — Transaction history retrieved.
+- `400 Bad Request` — Invalid filter, pagination, or date range.
+- `401 Unauthorized` — Authentication is missing or invalid.
+- `404 Not Found` — The user has no associated wallet, where handled as a not-found condition.
 
-```http
-GET /api/v1/transactions/:id
-```
+A separate user-facing `GET /api/v1/transactions/:id` endpoint is not included in the current documented implementation.
 
-Example:
+## 8. Administrative API
 
-```http
-GET /api/v1/transactions/transaction-uuid
-```
+Administrative endpoints require authentication and the `ADMIN` role.
 
-### Authentication
+The controller applies the JWT authentication guard and role guard to administrative routes. Ordinary users are denied access.
 
-Required.
+### 8.1 List Users
 
-### Status Codes
-
-```text
-200 OK
-401 Unauthorized
-403 Forbidden
-404 Not Found
-```
-
----
-
-# 9. Deposit API
-
-For the initial version of the project, deposits will be simulated.
-
-A production implementation would integrate with an external payment provider and confirm deposits using trusted payment events or webhooks.
-
-## 9.1 Create Deposit
-
-```http
-POST /api/v1/deposits
-```
-
-### Authentication
-
-Required.
-
-### Request
-
-```json
-{
-  "amount": "50000.00",
-  "currency": "NGN"
-}
-```
-
-### Response
-
-```json
-{
-  "id": "transaction-uuid",
-  "type": "DEPOSIT",
-  "status": "COMPLETED",
-  "amount": "50000.00",
-  "currency": "NGN"
-}
-```
-
-### Status Codes
-
-```text
-201 Created
-400 Bad Request
-401 Unauthorized
-422 Unprocessable Entity
-```
-
-The API must not allow clients to use deposits as an arbitrary mechanism for creating money in a production system.
-
----
-
-# 10. Withdrawal API
-
-## 10.1 Create Withdrawal
-
-```http
-POST /api/v1/withdrawals
-```
-
-### Authentication
-
-Required.
-
-### Request
-
-```json
-{
-  "amount": "10000.00",
-  "currency": "NGN"
-}
-```
-
-### Response
-
-```json
-{
-  "id": "transaction-uuid",
-  "type": "WITHDRAWAL",
-  "status": "COMPLETED",
-  "amount": "10000.00",
-  "currency": "NGN"
-}
-```
-
-### Status Codes
-
-```text
-201 Created
-400 Bad Request
-401 Unauthorized
-422 Unprocessable Entity
-```
-
-The system must verify that the wallet has sufficient available funds before processing a withdrawal.
-
----
-
-# 11. Admin API
-
-Administrative endpoints require:
-
-1. Authentication
-2. Administrator authorization
-
-## 11.1 List Users
+**Endpoint**
 
 ```http
 GET /api/v1/admin/users
 ```
 
----
+Returns a paginated list of users with supported filters.
 
-## 11.2 Get User
+**Query parameters**
+
+| Parameter | Purpose                      |
+| --------- | ---------------------------- |
+| `page`    | Requested page               |
+| `limit`   | Page size                    |
+| `search`  | Search supported user fields |
+| `role`    | Filter by `USER` or `ADMIN`  |
+| `status`  | Filter by account status     |
+
+Supported account statuses are `ACTIVE`, `SUSPENDED`, and `DEACTIVATED`.
+
+**Example**
+
+```http
+GET /api/v1/admin/users?page=1&limit=20&role=USER&status=ACTIVE
+```
+
+The service validates the supported role and status filters and returns pagination metadata.
+
+### 8.2 Get User Details
+
+**Endpoint**
 
 ```http
 GET /api/v1/admin/users/:id
 ```
 
----
+Retrieves the details of a specified user, including associated wallet information where available.
 
-## 11.3 Update User Status
+**Example**
+
+```http
+GET /api/v1/admin/users/user-uuid
+```
+
+Administrative responses must not expose password hashes or refresh-token secrets.
+
+**Relevant status codes**
+
+- `200 OK` — User retrieved.
+- `401 Unauthorized` — Authentication is missing or invalid.
+- `403 Forbidden` — User does not have the `ADMIN` role.
+- `404 Not Found` — User does not exist.
+
+### 8.3 Update User Status
+
+**Endpoint**
 
 ```http
 PATCH /api/v1/admin/users/:id/status
 ```
 
-Example request:
+Updates the status of a user account.
+
+**Request body**
 
 ```json
 {
@@ -554,354 +459,264 @@ Example request:
 }
 ```
 
----
+Supported status values:
 
-## 11.4 List Wallets
+- `ACTIVE`
+- `SUSPENDED`
+- `DEACTIVATED`
 
-```http
-GET /api/v1/admin/wallets
-```
+The service includes safeguards against invalid status values, self-suspension or self-deactivation by the acting administrator, and suspension or deactivation of the last active administrator.
 
----
+Sensitive status changes use database transaction and locking logic to coordinate the operation.
 
-## 11.5 Get Wallet
+**Relevant status codes**
 
-```http
-GET /api/v1/admin/wallets/:id
-```
+- `200 OK` — Status updated.
+- `400 Bad Request` — Unsupported status value or invalid request.
+- `401 Unauthorized` — Authentication is missing or invalid.
+- `403 Forbidden` — User is not an administrator or the requested action is prohibited.
+- `404 Not Found` — Target user does not exist.
 
----
+The precise exception-to-status mapping should be kept consistent with the controller and service implementation.
 
-## 11.6 List Transactions
+### 8.4 List Transactions
+
+**Endpoint**
 
 ```http
 GET /api/v1/admin/transactions
 ```
 
----
+Returns a paginated administrative view of transactions.
 
-## 11.7 Get Transaction
+**Query parameters**
+
+| Parameter   | Purpose                      |
+| ----------- | ---------------------------- |
+| `page`      | Requested page               |
+| `limit`     | Page size                    |
+| `type`      | Filter by transaction type   |
+| `status`    | Filter by transaction status |
+| `startDate` | Filter by starting date      |
+| `endDate`   | Filter by ending date        |
+
+**Example**
 
 ```http
+GET /api/v1/admin/transactions?page=1&limit=20&type=TRANSFER&status=COMPLETED
+```
+
+The service supports the documented filters, validates date ranges, and returns pagination metadata.
+
+**Relevant status codes**
+
+- `200 OK` — Transactions retrieved.
+- `400 Bad Request` — Invalid filters or date range.
+- `401 Unauthorized` — Authentication is missing or invalid.
+- `403 Forbidden` — User does not have the `ADMIN` role.
+
+### 8.5 Administrative endpoint restrictions
+
+The following endpoints are **not included in the currently documented implementation**:
+
+```text
+GET /api/v1/admin/wallets
+GET /api/v1/admin/wallets/:id
 GET /api/v1/admin/transactions/:id
 ```
 
-Administrative APIs must not allow administrators to arbitrarily modify financial records.
+They should not be treated as available API operations unless implemented and verified in the corresponding controllers and services.
 
-Financial records should remain auditable.
+Administrative access does not grant permission to arbitrarily modify financial records. Financial transaction and ledger integrity must be preserved.
 
----
+## 9. HTTP Status Codes
 
-# 12. Authentication Model
+The API uses conventional HTTP status codes where supported by the implementation.
 
-Protected endpoints will use bearer-token authentication.
+| Status                      | Meaning                                                     |
+| --------------------------- | ----------------------------------------------------------- |
+| `200 OK`                    | Request completed successfully                              |
+| `201 Created`               | A resource or operation was created                         |
+| `400 Bad Request`           | Request input or parameters are invalid                     |
+| `401 Unauthorized`          | Authentication is missing or invalid                        |
+| `403 Forbidden`             | Authenticated user lacks permission                         |
+| `404 Not Found`             | Requested resource was not found                            |
+| `409 Conflict`              | Request conflicts with existing state, where handled        |
+| `422 Unprocessable Entity`  | Business-rule violation, where mapped by the implementation |
+| `500 Internal Server Error` | Unexpected server-side failure                              |
 
-Example:
+`429 Too Many Requests` is not documented as an implemented rate-limiting response because rate limiting is outside the verified current scope.
 
-```http
-Authorization: Bearer <access-token>
-```
+The actual HTTP status returned for an error is determined by the relevant NestJS exception and exception-handling configuration.
 
-The request flow is:
+## 10. Error Handling
 
-```text
-Client
-   │
-   │ Bearer Token
-   ▼
-Authentication Guard
-   │
-   ├── Invalid → 401
-   │
-   └── Valid
-        │
-        ▼
-   Authorization
-        │
-        ├── Insufficient permission → 403
-        │
-        └── Authorized
-               │
-               ▼
-           Controller
-```
+The API uses NestJS exception handling for expected failures, including authentication, authorization, invalid input, and missing resources.
 
-Authentication determines:
+Error response shapes must match the actual response generated by the application.
 
-> Who are you?
-
-Authorization determines:
-
-> Are you allowed to perform this operation?
-
----
-
-# 13. HTTP Status Codes
-
-The API will use conventional HTTP status codes.
-
-| Status | Meaning                                       |
-| ------ | --------------------------------------------- |
-| 200    | Request completed successfully                |
-| 201    | Resource or operation created                 |
-| 400    | Invalid request                               |
-| 401    | Authentication required or invalid            |
-| 403    | Authenticated but not authorized              |
-| 404    | Resource not found                            |
-| 409    | Request conflicts with existing state         |
-| 422    | Request is valid but violates a business rule |
-| 429    | Rate limit exceeded                           |
-| 500    | Unexpected server error                       |
-
----
-
-# 14. Error Response Format
-
-The API will use a consistent error structure.
-
-Example:
-
-```json
-{
-  "statusCode": 422,
-  "code": "INSUFFICIENT_FUNDS",
-  "message": "Insufficient wallet balance",
-  "errors": [],
-  "timestamp": "2026-10-06T12:00:00Z",
-  "path": "/api/v1/transfers"
-}
-```
-
-Validation errors may contain field-level details:
+The following is an illustrative example of a possible business error, not a guarantee of the current response schema:
 
 ```json
 {
   "statusCode": 400,
-  "code": "VALIDATION_ERROR",
-  "message": "Invalid request",
-  "errors": [
-    {
-      "field": "amount",
-      "message": "Amount must be greater than zero"
-    }
-  ],
-  "timestamp": "2026-10-06T12:00:00Z",
-  "path": "/api/v1/transfers"
+  "message": "Invalid request"
 }
 ```
 
----
+Do not assume that a custom response containing `code`, `errors`, `timestamp`, and `path` is implemented unless a global exception filter or equivalent mechanism explicitly provides it.
 
-# 15. Pagination
+Errors returned to clients must not disclose database credentials, JWT secrets, password hashes, stack traces, or other sensitive implementation details.
 
-Collection endpoints will use pagination.
+## 11. Pagination and Filtering
 
-Example:
+Collection endpoints use pagination where implemented.
 
-```http
-GET /api/v1/transactions?page=1&limit=20
-```
-
-The response will contain:
-
-```json
-{
-  "data": [],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 100,
-    "totalPages": 5
-  }
-}
-```
-
-The API should enforce a maximum page size to prevent clients from requesting excessive amounts of data.
-
----
-
-# 16. Idempotency
-
-Financial operations must support idempotency.
-
-A client may send an idempotency key:
+The general query pattern is:
 
 ```http
-Idempotency-Key: 7c4e8d2f-...
+?page=1&limit=20
 ```
 
-For example:
+Responses include a data collection and pagination metadata, such as the requested page, page size, total records, and total pages.
 
-```http
-POST /api/v1/transfers
-Idempotency-Key: 7c4e8d2f-...
-```
+Filtering differs by endpoint:
 
-If the same operation is accidentally submitted multiple times with the same idempotency key, the system should not create multiple transfers.
+- **User transaction history:** page, limit, type, status, start date, and end date.
+- **Administrative user listing:** page, limit, search, role, and account status.
+- **Administrative transaction listing:** page, limit, type, status, start date, and end date.
 
-Conceptually:
+Clients should use only the filters supported by the specific endpoint.
+
+Pagination defaults, maximum page size, and invalid-parameter behavior must match the current service implementation.
+
+## 12. Authentication and Authorization Flow
+
+Protected requests follow this general flow:
 
 ```text
-Request
-   │
-   ▼
-Idempotency Key
-   │
-   ├── New
-   │    ↓
-   │  Process operation
-   │    ↓
-   │  Store result
-   │
-   └── Existing
-        ↓
-      Return original result
+Client Request
+      |
+      v
+JWT Authentication Guard
+      |
+      +-- Missing/invalid token --> 401
+      |
+      v
+Load Current User
+      |
+      +-- User missing or inactive --> 401
+      |
+      v
+Role Authorization (when required)
+      |
+      +-- Insufficient role --> 403
+      |
+      v
+Controller and Service
+      |
+      v
+Business Rules and Database Operations
 ```
 
-This protects against duplicate financial operations caused by:
+The JWT guard verifies the token and checks the current user record. The role guard enforces role requirements on administrative routes.
 
-- Network retries
-- Client retries
-- Timeout responses
-- Duplicate requests
+Authentication and authorization are enforced on the backend and are not delegated to the frontend.
 
----
+## 13. Financial Operation Principles
 
-# 17. Financial Operation Principle
+Clients request financial operations; they do not determine the resulting financial state.
 
-Clients must request financial operations rather than directly manipulating financial state.
+A transfer request identifies the recipient and amount. The backend determines the source wallet from the authenticated user and applies the financial business rules.
 
-Bad:
+The implementation uses a transaction record to represent the transfer and ledger entries to record the associated debit and credit.
 
-```http
-PATCH /api/v1/wallets/:id
-```
+A successful transfer must not leave wallet balances and ledger records inconsistent.
 
-```json
-{
-  "balance": "80000"
-}
-```
+The database transaction, idempotency, and concurrency safeguards are central to maintaining this invariant.
 
-The client should never determine the resulting balance.
+## 14. API Versioning
 
-Instead:
-
-```http
-POST /api/v1/transfers
-```
-
-```json
-{
-  "recipientWalletId": "wallet-b",
-  "amount": "20000.00",
-  "currency": "NGN"
-}
-```
-
-The backend determines the appropriate financial changes.
-
-This ensures that financial business rules remain inside the backend.
-
----
-
-# 18. API Versioning
-
-All initial endpoints will use:
+The current API uses the version prefix:
 
 ```text
 /api/v1
 ```
 
-Example:
+Examples:
 
 ```text
 /api/v1/auth/login
 /api/v1/wallets/me
-/api/v1/transfers
-/api/v1/transactions
+/api/v1/wallets/transfers
+/api/v1/wallets/transactions
+/api/v1/admin/users
+/api/v1/admin/transactions
 ```
 
-Breaking API changes can be introduced under a future version:
+Future breaking changes may be introduced under a new version such as `/api/v2` when required. Existing clients should not be moved to a new version without a deliberate compatibility plan.
+
+## 15. Current API Map
+
+The following map reflects the endpoints documented for the current implementation.
+
+### Authentication
 
 ```text
-/api/v2
-```
-
-without immediately breaking clients using `/api/v1`.
-
----
-
-# 19. Initial API Map
-
-```text
-AUTH
-
 POST   /api/v1/auth/register
 POST   /api/v1/auth/login
 POST   /api/v1/auth/refresh
 POST   /api/v1/auth/logout
+```
 
+### Wallets and transfers
 
-USERS
-
-GET    /api/v1/users/me
-
-
-WALLETS
-
+```text
 GET    /api/v1/wallets/me
+POST   /api/v1/wallets/transfers
+GET    /api/v1/wallets/transactions
+```
 
+### Administration
 
-TRANSFERS
-
-POST   /api/v1/transfers
-
-
-TRANSACTIONS
-
-GET    /api/v1/transactions
-GET    /api/v1/transactions/:id
-
-
-DEPOSITS
-
-POST   /api/v1/deposits
-
-
-WITHDRAWALS
-
-POST   /api/v1/withdrawals
-
-
-ADMIN
-
+```text
 GET    /api/v1/admin/users
 GET    /api/v1/admin/users/:id
 PATCH  /api/v1/admin/users/:id/status
-
-GET    /api/v1/admin/wallets
-GET    /api/v1/admin/wallets/:id
-
 GET    /api/v1/admin/transactions
-GET    /api/v1/admin/transactions/:id
 ```
 
----
+The map excludes planned endpoints that have not been verified as implemented.
 
-# 20. Future API Considerations
+## 16. Future API Considerations
 
-Future versions may introduce endpoints for:
+The following features are outside the current implemented scope and may be considered in future iterations:
 
-- Payment provider webhooks
-- Beneficiaries
-- Bank account management
-- KYC
-- Statements
-- Notifications
-- Currency exchange
-- Multi-currency wallets
-- Transaction reconciliation
-- Audit logs
+- Deposit and withdrawal operations.
+- Payment provider integrations and trusted payment webhooks.
+- Bank account management.
+- Beneficiaries.
+- KYC and identity verification.
+- Statements and downloadable transaction reports.
+- Notifications.
+- Multi-currency wallets and currency exchange.
+- Transaction reconciliation tools.
+- Dedicated audit-log endpoints.
+- Administrative wallet details and individual transaction retrieval endpoints.
+- Additional rate limiting and abuse-prevention controls.
 
-These features are outside the initial MVP scope.
+These features must be designed, implemented, tested, and documented before they are presented to API consumers as available functionality.
+
+## 17. Maintaining This Document
+
+This document is intended to describe the API contract, not merely the intended architecture.
+
+Whenever an endpoint, DTO, response schema, authentication mechanism, business rule, or HTTP status mapping changes:
+
+1. Update the relevant section of this document.
+2. Verify request and response examples against the implementation.
+3. Add or update automated tests.
+4. Confirm that the documented endpoint map matches the controllers.
+5. Clearly mark functionality that remains planned or unverified.
+
+The implementation is the source of truth for available API behavior. Documentation must not advertise an endpoint or security guarantee that the application does not provide.

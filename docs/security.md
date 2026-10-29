@@ -1,688 +1,466 @@
+# Security Documentation
+
 ## 1. Security Overview
 
-Security is a core requirement of the Fintech Wallet & Ledger API because the system handles user accounts and financial operations.
+Security is a core requirement of the Fintech Wallet & Ledger API because the application handles user accounts, authentication credentials, wallet balances, transfers, and financial records.
 
-The security architecture will focus on:
+The current implementation focuses on:
 
-- Authentication
-- Authorization
-- Password security
-- Input validation
-- Financial operation protection
-- Idempotency
-- Rate limiting
-- Secret management
-- Database security
-- Auditability
-- Secure error handling
-- Protection against common web attacks
+- JWT-based authentication.
+- Password hashing with Argon2.
+- Refresh-token handling and rotation.
+- Role-based authorization for administrative endpoints.
+- User account-status enforcement.
+- Wallet ownership and access control.
+- Idempotent transfers.
+- Atomic financial operations.
+- Ledger entries for transfer debits and credits.
+- Protection against insufficient funds and concurrent spending.
+- Administrative safeguards for user account-status changes.
+- Automated tests for important authentication, authorization, and financial scenarios.
 
-The principle is:
+This project is a learning implementation of a financial API. The controls documented here do not constitute a production security certification or guarantee that the application is ready for real-money operations.
 
-> Security controls should be applied at multiple layers rather than relying on a single security mechanism.
+## 2. Authentication
 
----
+Authentication establishes the identity of the user making a request.
 
-# 2. Authentication
+The application uses JWT-based access tokens and refresh tokens.
 
-Authentication determines the identity of the user making a request.
+### Access tokens
 
-The application will use token-based authentication.
-
-The initial authentication flow will use:
-
-```text
-Access Token
-+
-Refresh Token
-```
-
-Protected requests will include:
+Protected endpoints require an access token in the HTTP `Authorization` header.
 
 ```http
 Authorization: Bearer <access-token>
 ```
 
-The server will validate the access token before allowing access to protected resources.
+The JWT authentication guard verifies the token and checks that it contains the expected user identifier and role claims.
 
----
+Access tokens are configured with a 15-minute lifetime.
 
-# 3. Password Security
+### Current account verification
 
-Passwords must never be stored in plaintext.
+A valid JWT alone is not sufficient to access protected endpoints. The authentication guard retrieves the current user from the database and verifies that the account exists and has an `ACTIVE` status.
 
-When a user registers:
+The user's current role is taken from the database rather than trusted solely from the role claim in the token. This helps ensure that role changes take effect even when an older access token has not yet expired.
 
-```text
-Plain Password
-      ↓
-Password Hashing Algorithm
-      ↓
-Password Hash
-      ↓
-Database
-```
+Requests are rejected when:
 
-When the user logs in:
+- The access token is missing.
+- The token is invalid or expired.
+- Required token claims are missing or invalid.
+- The user no longer exists.
+- The user's account is `SUSPENDED` or `DEACTIVATED`.
+- The database lookup required for authentication fails.
 
-```text
-Provided Password
-      ↓
-Compare Against Hash
-      ↓
-Valid?
-   ├── YES → Authenticate
-   └── NO  → Reject
-```
+### Refresh tokens
 
-A strong password hashing algorithm such as Argon2id or bcrypt will be used.
+The authentication module supports refresh-token operations, including token rotation. Refresh operations validate the associated user's account status before issuing new authentication credentials.
 
-Passwords should never appear in:
+Refresh tokens should be treated as sensitive credentials and must not be exposed in application logs or API responses beyond their intended authentication use.
 
-- Logs
-- API responses
-- Database records in plaintext
-- Error messages
-- Source control
-- Environment examples
+## 3. Password Security
 
----
+Passwords are hashed with Argon2 before being stored in the database.
 
-# 4. Authorization
+During login, the application verifies the submitted password against the stored password hash.
 
-Authentication answers:
+The authentication flow is:
 
-> Who are you?
+1. Receive the submitted credentials.
+2. Locate the user account.
+3. Verify the password against the stored Argon2 hash.
+4. Reject invalid credentials.
+5. Confirm the account is active.
+6. Issue authentication tokens when the checks succeed.
 
-Authorization answers:
+Plaintext passwords must never be stored in the database.
 
-> Are you allowed to perform this operation?
+Passwords and password hashes must not be unnecessarily exposed through API responses, logs, error messages, or source control. User-facing administrative responses must not expose the `passwordHash` field.
 
-The application will implement role-based authorization.
+## 4. Authorization and Roles
 
-Initial roles:
+Authentication establishes who is making a request. Authorization determines whether that user is permitted to perform the requested operation.
 
-```text
-USER
-ADMIN
-```
+The application defines two user roles:
 
-Example:
+| Role    | Responsibility                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------- |
+| `USER`  | Access permitted user-facing features, including the user's own wallet and authorized financial operations. |
+| `ADMIN` | Access administrative endpoints for user management and transaction oversight.                              |
 
-```text
-USER
-  ├── Manage own account
-  ├── Manage own wallet
-  └── Perform authorized financial operations
+### Role-based access control
 
-ADMIN
-  ├── View users
-  ├── View wallets
-  ├── View transactions
-  └── Perform authorized administrative actions
-```
+The application uses a `Roles` decorator to declare the roles permitted to access a route and a `RolesGuard` to enforce the requirement.
 
-Administrative endpoints must never be accessible to normal users.
+Administrative routes use both the JWT authentication guard and the role guard. A valid authenticated user without the `ADMIN` role receives a `403 Forbidden` response when attempting to access these routes.
 
----
+Requests without valid authentication receive a `401 Unauthorized` response.
 
-# 5. Resource Ownership
+### Public registration
 
-Users must only be able to access resources they are authorized to access.
+Public registration does not allow clients to choose their own role. The registration DTO accepts the permitted registration fields and does not expose the `role` field for user-controlled assignment.
 
-For example, User A must not be able to retrieve User B's wallet simply by changing an ID:
+Administrator accounts are created through a separate seed script rather than by allowing a public registration request to assign the `ADMIN` role.
 
-```http
-GET /api/v1/wallets/user-b-wallet-id
-```
+## 5. User and Wallet Access Control
 
-The backend must verify ownership or appropriate authorization before returning protected information.
+Users must only access resources permitted by their authenticated identity.
 
-Authorization must be enforced server-side.
+The wallet endpoint for the current user derives the user identity from the authenticated request rather than trusting a user identifier supplied by the client.
 
-The client must never be trusted to determine whether an operation is permitted.
+Transaction history is scoped to the authenticated user's wallet. This prevents a user from retrieving another user's transaction history merely by changing request parameters.
 
----
+Administrative endpoints are separately protected by role-based authorization.
 
-# 6. Financial Operation Security
+The backend is responsible for enforcing access control. Frontend restrictions alone are not sufficient.
 
-Financial operations require additional protection.
+Any new endpoint that accepts a user ID, wallet ID, or transaction ID must verify ownership or require an appropriate administrative permission before returning protected data or modifying a resource.
 
-For transfers:
+## 6. Financial Operation Security
 
-```text
-Request
-   ↓
-Authenticate User
-   ↓
-Authorize Operation
-   ↓
-Validate Input
-   ↓
-Identify Source Wallet
-   ↓
-Verify Ownership
-   ↓
-Verify Destination Wallet
-   ↓
-Verify Wallet Status
-   ↓
-Verify Currency
-   ↓
-Verify Available Balance
-   ↓
-Process Atomically
-   ↓
-Create Ledger Records
-```
+Financial operations require stronger consistency guarantees than ordinary CRUD operations.
 
-The system must not allow users to directly modify wallet balances.
+The current transfer implementation uses the authenticated user's wallet, validates the transfer request, checks available funds, and performs the related financial changes within a database transaction.
 
-For example, this should not be exposed as a public operation:
+The intended transfer flow is:
 
-```http
-PATCH /api/v1/wallets/:id/balance
-```
+1. Authenticate the requester.
+2. Validate the request and idempotency key.
+3. Identify the source wallet associated with the authenticated user.
+4. Validate the transfer details and applicable business rules.
+5. Check that sufficient funds are available.
+6. Create or update the required transaction and wallet records.
+7. Record the corresponding debit and credit ledger entries.
+8. Commit the database transaction if the operation succeeds.
 
-Instead, balance changes must occur through controlled financial operations such as:
+The exact checks and permitted states are determined by the implemented transfer service and database contract.
 
-```text
-Deposit
-Withdrawal
-Transfer
-```
+### Balance integrity
 
----
+Clients must not be allowed to directly modify wallet balances through an unrestricted balance-update endpoint.
 
-# 7. Input Validation
+Balance changes must occur through controlled business operations. For transfers, the wallet changes and corresponding ledger records must be committed together.
 
-All external input must be validated before entering business logic.
+Deposits and withdrawals are not currently integrated with a payment provider or external banking system. They must not be treated as completed real-money capabilities.
 
-Validation applies to:
+## 7. Input Validation and Financial Amounts
 
-- Request bodies
-- Query parameters
-- Route parameters
-- Headers where applicable
+External input must be validated before it is used in business logic or database operations.
 
-Examples of invalid transfer requests include:
+The application uses request DTOs and service-level checks for supported operations. Query filters and pagination parameters are also validated where implemented.
 
-```text
-Negative amount
-Zero amount
-Missing recipient
-Invalid wallet ID
-Unsupported currency
-Malformed UUID
-```
+For financial amounts, the API must reject invalid values, including non-positive amounts where positive transfer amounts are required.
 
-Example:
+The database wallet balance and transaction amount fields use numeric decimal types rather than binary floating-point database fields. Monetary calculations should preserve decimal precision throughout the financial workflow.
 
-```json
-{
-  "amount": "-5000"
-}
-```
+Any future financial endpoint must validate:
 
-must be rejected.
+- Required fields.
+- Amounts and permitted precision.
+- Source and destination identifiers.
+- Supported transaction types and statuses.
+- Pagination and filter values.
+- Date ranges where applicable.
+- Idempotency requirements.
 
-Validation protects both the API and the underlying business logic.
+Validation rules must be enforced on the server, even when the frontend performs equivalent checks.
 
----
+## 8. Idempotency and Duplicate Transfers
 
-# 8. Financial Amount Validation
+The transfer endpoint supports an idempotency key so that retries of the same operation do not unintentionally create duplicate transfers.
 
-Financial amounts must satisfy:
+This helps protect against duplicate submissions caused by network failures, timeouts, client retries, or repeated requests.
 
-```text
-amount > 0
-```
+The application must preserve the relationship between an idempotency key and the operation it represents. Future changes must maintain appropriate uniqueness and transaction guarantees for idempotency handling.
 
-Monetary values must use exact decimal representations rather than floating-point arithmetic.
+Idempotency does not replace authentication, authorization, balance validation, or database transaction handling.
 
-The backend must also enforce appropriate precision and scale for monetary values.
+## 9. Database Transactions and Ledger Integrity
 
----
+A financial transfer involves multiple related database changes, including the transaction record, wallet balances, and ledger entries.
 
-# 9. Idempotency
-
-Financial operations must be protected against accidental duplicate processing.
-
-Clients performing operations such as transfers may provide:
-
-```http
-Idempotency-Key: unique-request-id
-```
-
-The server will use the key to determine whether an operation has already been processed.
-
-Conceptually:
-
-```text
-Request
-   ↓
-Idempotency Key
-   ↓
-Already exists?
-   │
-   ├── YES → Return previous result
-   │
-   └── NO
-        ↓
-     Process
-        ↓
-     Store result
-```
-
-This protects against duplicate transfers caused by:
-
-- Client retries
-- Network failures
-- Timeouts
-- Duplicate button clicks
-- Repeated requests
-
----
-
-# 10. Database Transactions
-
-Financial operations involving multiple database modifications must use database transactions.
-
-For example, a transfer may modify:
-
-```text
-Transaction
-Wallet A
-Wallet B
-Ledger Entry A
-Ledger Entry B
-```
-
-These changes must be treated as a single atomic operation.
+These changes are executed within a database transaction so that they can succeed or fail as a unit.
 
 Conceptually:
 
 ```text
 BEGIN
 
-Create Transaction
-
-Debit Wallet A
-
-Credit Wallet B
-
-Create Ledger Entry A
-
-Create Ledger Entry B
+Create transfer transaction
+Debit source wallet
+Credit destination wallet
+Create debit ledger entry
+Create credit ledger entry
 
 COMMIT
 ```
 
-If an operation fails:
+If a required operation fails, the database transaction must roll back rather than leave a partially completed transfer.
 
-```text
-ROLLBACK
-```
+For a successful transfer, the ledger records the debit and credit associated with the transaction. The transaction record represents the operation, while the ledger entries record the financial movements.
 
-No partial financial state should remain.
+This separation supports traceability and future reconciliation.
 
----
+## 10. Concurrency and Double-Spending Protection
 
-# 11. Concurrency Protection
+Concurrent requests can create financial inconsistencies if multiple operations spend the same available balance.
 
-The system must protect against race conditions.
+The transfer implementation uses database-level transaction and locking safeguards to protect critical wallet operations. Automated tests cover important insufficient-funds and concurrent-transfer scenarios.
 
-Example:
+For example, if a wallet has ₦100,000, two concurrent transfers of ₦80,000 must not both succeed against that same available balance.
 
-```text
-Wallet A = ₦100,000
-```
-
-Two requests arrive simultaneously:
-
-```text
-A → B = ₦80,000
-A → C = ₦80,000
-```
-
-Both requests must not be allowed to spend the same ₦100,000.
-
-The implementation will use appropriate database transaction isolation and locking strategies where required.
-
-Critical wallet operations must ensure that the balance is evaluated safely when concurrent requests occur.
-
----
-
-# 12. Double-Spending Protection
-
-The system must prevent a user from spending the same funds multiple times through concurrent requests.
-
-The financial operation must ensure:
+The key invariant is:
 
 ```text
 Total successful debits
-≤
-Available funds
+must not exceed available funds
 ```
 
-The database must be involved in protecting this invariant rather than relying only on application-level checks.
+Concurrency protection must remain enforced at the database and service layers. An application-level balance check performed without appropriate concurrency control is insufficient.
 
----
+Changes to transfer logic, database locking, transaction boundaries, or ledger operations must be accompanied by regression tests.
 
-# 13. Rate Limiting
+## 11. User Account Status and Administrative Safeguards
 
-Public and sensitive endpoints should be rate limited.
+The user model supports the following account statuses:
 
-Higher-risk endpoints include:
+- `ACTIVE`
+- `SUSPENDED`
+- `DEACTIVATED`
 
-```text
-POST /auth/login
-POST /auth/register
-POST /auth/refresh
-POST /transfers
-POST /deposits
-POST /withdrawals
-```
+The JWT guard checks the user's current status in the database for protected requests. Suspended and deactivated accounts cannot continue using protected endpoints simply because they possess an unexpired access token.
 
-Rate limiting helps protect against:
+The administrative API supports user-status updates and validates the requested status.
 
-- Brute-force attacks
-- Credential stuffing
-- Automated abuse
-- Request flooding
-- Accidental request storms
+Additional safeguards in the administrative status-update service include:
 
-Rate limits may differ by endpoint and user type.
+- Rejecting unsupported status values.
+- Rejecting attempts by an administrator to suspend or deactivate their own account.
+- Preventing suspension or deactivation of the last active administrator.
+- Using database transaction and locking logic to coordinate sensitive status changes.
 
----
+These safeguards are covered by service-level tests. The database locking implementation must be reviewed and verified against the actual PostgreSQL behavior before the application is considered production-ready.
 
-# 14. Secrets Management
+## 12. Administrative API Security
 
-Sensitive configuration must never be committed to source control.
+The administrative API provides endpoints for:
+
+- Listing users with supported filters and pagination.
+- Retrieving a user's details.
+- Updating user account status.
+- Listing transactions with supported filters and pagination.
+
+These routes are protected at the controller level by JWT authentication and the `ADMIN` role requirement.
+
+Administrative responses must avoid exposing password hashes, refresh-token secrets, or other unnecessary sensitive fields.
+
+Administrative operations that change account status should be reviewed for authorization, concurrency, and auditability. A complete persistent audit log for all administrative actions is not currently documented as implemented.
+
+## 13. Error Handling
+
+Errors returned to clients should provide enough information to explain the failure without exposing database credentials, internal infrastructure details, access tokens, or other secrets.
+
+The application uses NestJS exceptions for expected authentication, authorization, validation, and resource-not-found failures.
+
+Common HTTP status meanings include:
+
+| Status                      | Meaning                                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| `400 Bad Request`           | The request or supplied parameters are invalid.                                           |
+| `401 Unauthorized`          | Authentication is missing or invalid.                                                     |
+| `403 Forbidden`             | The authenticated user lacks the required permission.                                     |
+| `404 Not Found`             | The requested resource does not exist or cannot be found through the requested operation. |
+| `500 Internal Server Error` | An unexpected server-side failure occurred.                                               |
+
+Unexpected errors must not expose stack traces, SQL statements containing sensitive data, connection credentials, or internal infrastructure information to clients.
+
+## 14. Secrets and Environment Configuration
+
+Sensitive configuration must not be committed to source control.
 
 Examples include:
 
-```text
-DATABASE_URL
-JWT_SECRET
-JWT_REFRESH_SECRET
-API_KEYS
-PAYMENT_PROVIDER_SECRET
-```
+- `DATABASE_URL`
+- JWT signing secrets.
+- Refresh-token signing secrets, if configured separately.
+- Administrator seed credentials.
+- External service credentials introduced in future integrations.
 
-Secrets will be supplied through environment configuration or a dedicated secret-management system.
+Development credentials should be supplied through local environment configuration. The repository may contain an `.env.example` file with placeholder values, but it must not contain actual credentials.
 
-The repository should contain:
+The administrator seed script must use environment-supplied credentials rather than hardcoded production secrets.
 
-```text
-.env.example
-```
+Before deployment, verify that real secrets are excluded from Git history and that production credentials are stored and managed using an appropriate secret-management process.
 
-but not:
+## 15. Database Security
 
-```text
-.env
-```
+The API uses PostgreSQL for application data and financial records.
 
-when it contains real credentials.
+Database credentials must be protected and must not be returned through API responses or written to logs.
 
----
+For production deployment:
 
-# 15. Environment Separation
+- Use a dedicated application database account.
+- Grant only the database permissions the application requires.
+- Restrict database network access.
+- Do not expose the database publicly without a justified and controlled access design.
+- Use separate databases and credentials for development, testing, and production.
+- Back up important data and test the restoration process.
+- Apply schema migrations through a controlled process.
 
-The application should distinguish between environments:
+These are deployment requirements and should not be interpreted as proof that production infrastructure has already been configured.
 
-```text
-Development
-Testing
-Staging
-Production
-```
+## 16. Logging and Auditability
 
-Production credentials and resources must not be reused in development or testing.
+The transaction and ledger models provide a foundation for tracing financial operations. Transaction records identify the operation, while ledger entries record the associated wallet movements.
 
-Example:
+For a financial system, logs and audit records should make it possible to investigate important events without exposing credentials or unnecessary personal information.
 
-```text
-Development PostgreSQL
-        ≠
-Production PostgreSQL
-```
+Sensitive values that must not be logged include:
 
----
+- Plaintext passwords.
+- Access tokens and refresh tokens.
+- JWT signing secrets.
+- Database credentials.
+- External service secrets.
 
-# 16. Database Security
+A comprehensive, persistent security audit system for login attempts, authentication failures, and every administrative action has not been established as part of the current implementation.
 
-Database credentials must be protected.
+Before production use, define a structured audit strategy for important security and financial events, including retention, access restrictions, monitoring, and protection against unauthorized modification.
 
-The application database user should have only the permissions required by the application.
+## 17. API and Transport Security
 
-Database access should not be publicly exposed unnecessarily.
+The API uses the global `/api/v1` route prefix.
 
-Production database access should be restricted through appropriate network controls.
+Production deployment must provide HTTPS so credentials and financial requests are protected in transit. HTTPS termination, CORS allowlists, secure HTTP headers, request-size limits, and production network restrictions must be verified in the actual deployment configuration.
 
----
+This document does not claim that rate limiting, a web application firewall, or all recommended HTTP security headers have already been configured.
 
-# 17. Error Handling
+Before exposing the API publicly, review these controls and add the missing protections appropriate to the deployment environment.
 
-Errors returned to clients must not expose sensitive internal information.
+## 18. Rate Limiting and Abuse Prevention
 
-Bad:
+Rate limiting is a recommended future security control for sensitive and public endpoints, particularly:
 
-```json
-{
-  "error": "PostgreSQL connection failed at 10.0.0.12:5432 using password..."
-}
-```
+- Registration.
+- Login.
+- Refresh-token operations.
+- Transfer requests.
 
-Better:
+Rate limiting is not documented as implemented in the current application.
 
-```json
-{
-  "code": "INTERNAL_SERVER_ERROR",
-  "message": "An unexpected error occurred"
-}
-```
+Before production exposure, implement and test suitable limits to reduce brute-force attempts, credential stuffing, automated abuse, and excessive request traffic. The chosen solution should account for the deployment topology and, where necessary, use shared storage so that limits work across multiple application instances.
 
-Detailed technical information should be available in internal logs where appropriate.
+## 19. Dependency and Configuration Maintenance
 
----
+The application depends on third-party packages for its runtime, authentication, database access, and testing.
 
-# 18. Logging
+Before release:
 
-The application should maintain structured logs for important events.
+- Review dependency vulnerabilities.
+- Update dependencies through a controlled process.
+- Remove unused packages.
+- Keep environment-specific configuration separate.
+- Run the automated test suite after security-related changes.
+- Review changes to authentication, authorization, database access, and financial operations.
 
-Examples include:
+A successful test run does not replace dependency auditing, deployment review, or independent security testing.
 
-```text
-User registered
-User login attempt
-Authentication failure
-Wallet created
-Transfer initiated
-Transfer completed
-Transfer failed
-Withdrawal requested
-Deposit processed
-Admin action performed
-```
+## 20. Security Testing
 
-Logs must not contain:
+Security-related behavior is tested through automated unit and service tests.
 
-- Passwords
-- Authentication tokens
-- API secrets
-- Sensitive financial credentials
-
-Financial logs should contain enough information to support investigation without exposing unnecessary sensitive information.
-
----
-
-# 19. Auditability
-
-Financial activity must be traceable.
-
-For important financial operations, the system should be able to determine:
-
-```text
-Who initiated the operation?
-What operation occurred?
-Which wallets were involved?
-How much money was involved?
-When did it occur?
-What was the result?
-What ledger entries were created?
-```
-
-The transaction and ledger models provide the foundation for this audit trail.
-
-Administrative actions should also be auditable as the system develops.
-
----
-
-# 20. API Security
-
-The API should implement appropriate HTTP security controls.
-
-These may include:
-
-- HTTPS in production
-- Secure HTTP headers
-- CORS configuration
-- Request validation
-- Rate limiting
-- Authentication
-- Authorization
-- Secure cookie configuration where cookies are used
-- Request size limits
-
-The API should not expose unnecessary endpoints or internal implementation details.
-
----
-
-# 21. Transport Security
-
-Production traffic must use HTTPS.
-
-```text
-Client
-   │
-   │ HTTPS
-   ▼
-API
-```
-
-Unencrypted HTTP should not be used for production financial operations.
-
----
-
-# 22. CORS
-
-Cross-Origin Resource Sharing should be explicitly configured.
-
-The application should not use an unrestricted configuration such as:
-
-```text
-Access-Control-Allow-Origin: *
-```
-
-for authenticated production operations unless there is a deliberate architectural reason.
-
-Allowed origins should be explicitly configured.
-
----
-
-# 23. Dependency Security
-
-Third-party dependencies introduce potential security risks.
-
-The project should regularly:
-
-- Review dependencies
-- Apply security updates
-- Remove unused dependencies
-- Run dependency vulnerability checks
-- Avoid unnecessary packages
-
-The application should keep its dependency surface as small as reasonably possible.
-
----
-
-# 24. Security Testing
-
-Security should be tested as part of the development lifecycle.
-
-Tests should include:
+The existing test coverage includes important scenarios involving:
 
 ### Authentication
 
-- Invalid credentials
-- Expired tokens
-- Missing tokens
-- Invalid tokens
+- Missing, invalid, and expired access tokens.
+- Missing or invalid token claims.
+- Nonexistent users.
+- Suspended and deactivated accounts.
+- Database lookup failures during authentication.
+- Current database roles overriding stale JWT role claims.
 
 ### Authorization
 
-- User accessing another user's wallet
-- Normal user accessing admin endpoints
-- Suspended user performing financial operations
+- Administrators accessing protected administrative routes.
+- Regular users being denied administrative access.
+- Unauthenticated requests being rejected.
+- Role guard behavior when no role restriction is declared.
 
-### Financial Security
+### Transfers and wallet operations
 
-- Insufficient funds
-- Duplicate transfers
-- Concurrent transfers
-- Negative amounts
-- Zero amounts
-- Invalid wallets
-- Same source and destination wallet
+- Insufficient-funds scenarios.
+- Duplicate-transfer protection.
+- Transaction and ledger behavior.
+- Concurrent transfer safeguards.
+- Wallet-scoped transaction history.
 
-### API Security
+### Administrative operations
 
-- Rate limiting
-- Input validation
-- Malformed requests
-- Oversized requests
+- User listing and filtering.
+- User detail retrieval.
+- Account-status validation.
+- Self-suspension and self-deactivation protection.
+- Last-active-administrator protection.
 
----
+These tests provide evidence for the specific scenarios they cover. They do not establish that every security risk has been addressed.
 
-# 25. Security Principles
+Before production use, add broader integration and security testing for rate limiting, malformed and oversized requests, dependency vulnerabilities, deployment configuration, and other controls that are not yet implemented or verified.
 
-The project will follow these principles:
+## 21. Current Scope and Known Limitations
 
-1. Never trust client input.
-2. Authenticate before accessing protected resources.
-3. Authorize every sensitive operation.
-4. Never store passwords in plaintext.
-5. Never expose secrets through source control or API responses.
-6. Never allow clients to directly manipulate financial balances.
-7. Treat financial operations as atomic.
-8. Protect against concurrent financial operations.
-9. Make financial operations idempotent where appropriate.
-10. Keep an auditable record of financial activity.
-11. Fail safely.
-12. Apply least privilege.
-13. Prefer explicit security controls over implicit assumptions.
-14. Security should be considered during design, implementation, testing, and deployment.
+The following capabilities are outside the current implementation scope or require further verification:
 
----
+- Integration with real deposit and withdrawal providers.
+- Multi-factor authentication.
+- Transaction PINs or biometric confirmation.
+- KYC verification and fraud detection.
+- Transaction limits and suspicious-activity monitoring.
+- Rate limiting.
+- Comprehensive persistent security audit logging.
+- Production HTTPS, CORS, HTTP-header, and network-security configuration.
+- Dedicated production secret management.
+- Independent penetration testing and formal security review.
 
-# 26. Future Security Considerations
+The absence of these features should be considered when deciding how the API may safely be used.
 
-As the platform evolves, additional security controls may include:
+## 22. Security Principles
 
-- Multi-factor authentication
-- Device/session management
-- Transaction PIN
-- Biometric authentication
-- KYC verification
-- Transaction limits
-- Suspicious transaction detection
-- Fraud detection
-- IP/device monitoring
-- Web Application Firewall
-- Secrets manager
-- Security monitoring
-- Distributed tracing
-- Security incident response
-- Encryption of sensitive data at rest
+The project follows these core principles:
+
+1. Never store plaintext passwords.
+2. Authenticate requests before allowing protected access.
+3. Enforce authorization on the server.
+4. Use the current account status and role when authorizing protected requests.
+5. Prevent users from assigning themselves administrative privileges through public registration.
+6. Scope user resources to the authenticated identity.
+7. Treat transfers as atomic financial operations.
+8. Protect against duplicate transfers and concurrent spending.
+9. Maintain transaction and ledger consistency.
+10. Keep secrets out of source control, logs, and API responses.
+11. Fail safely when authentication or required database checks fail.
+12. Test security-sensitive behavior when changing the implementation.
+13. Distinguish implemented controls from planned protections.
+14. Review the complete deployment environment before exposing the API to real users or real-money activity.
+
+## 23. Future Security Improvements
+
+As the API evolves, the following controls should be evaluated and implemented where appropriate:
+
+- Rate limiting and brute-force protection.
+- Multi-factor authentication.
+- Session and device management.
+- Transaction confirmation mechanisms.
+- KYC and identity verification.
+- Transaction limits and fraud monitoring.
+- Structured security audit logging.
+- Production secret management.
+- HTTPS and hardened HTTP configuration.
+- Automated dependency vulnerability scanning.
+- Backup and disaster-recovery testing.
+- Integration testing and independent security assessment.
+
+These items are future improvements, not claims about existing functionality.
